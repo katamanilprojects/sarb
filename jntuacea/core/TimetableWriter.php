@@ -19,10 +19,19 @@ final class TimetableWriter
             $stmt=$this->db->prepare('SELECT COALESCE((SELECT timing_id FROM class_timing_schedule WHERE class_id=? AND from_date<=CURRENT_DATE AND (to_date IS NULL OR to_date>=CURRENT_DATE) ORDER BY from_date DESC,id DESC LIMIT 1),timing_id) timing_id FROM classes WHERE id=?');$stmt->bind_param('ii',$class,$class);$stmt->execute();$timing=(int)$stmt->get_result()->fetch_row()[0];
             if((int)$slot['timing_id']!==$timing){throw new \DomainException('This period does not belong to the current class timing schedule.');}
             $code=trim($activity??'');
-            if($subject){$stmt=$this->db->prepare('SELECT subcode FROM subjects WHERE id=? AND class_id=?');$stmt->bind_param('ii',$subject,$class);$stmt->execute();$r=$stmt->get_result()->fetch_row();if(!$r){throw new \DomainException('Select a subject belonging to this class.');}$code=$r[0];}
+            $currSubId=null;
+            if($subject){
+                $stmt=$this->db->prepare('SELECT subcode,curr_sub_id FROM subjects WHERE id=? AND class_id=?');
+                $stmt->bind_param('ii',$subject,$class);
+                $stmt->execute();
+                $r=$stmt->get_result()->fetch_assoc();
+                if(!$r){throw new \DomainException('Select a subject belonging to this class.');}
+                $code=$r['subcode'];
+                $currSubId=!empty($r['curr_sub_id'])?(int)$r['curr_sub_id']:null;
+            }
             elseif($code===''){throw new \InvalidArgumentException('Select a subject or enter an activity.');}
-            $stmt=$this->db->prepare("SELECT t.id,t.class_id,t.building_name,t.class_hall_name,t.subject_id FROM class_timetables t JOIN classes c ON c.id=t.class_id JOIN class_timings ct ON ct.id=t.Hour WHERE t.weekday=? AND ct.start_time<? AND ct.end_time>? AND c.start_date<=? AND c.end_date>=? AND ((t.class_id=? AND (? IS NULL OR t.subject_id IS NULL OR t.subject_id=?)) OR (t.class_id!=? AND ?<>'' AND ?<>'' AND t.building_name=? AND t.class_hall_name=?) OR (t.class_id!=? AND ? IS NOT NULL AND EXISTS(SELECT 1 FROM faculty_sub a JOIN faculty_sub b ON b.faculty_id=a.faculty_id WHERE a.sub_id=? AND b.sub_id=t.subject_id))) FOR UPDATE");
-            $stmt->bind_param('sssssiiiiissssiii',$weekday,$slot['end_time'],$slot['start_time'],$c['end_date'],$c['start_date'],$class,$subject,$subject,$class,$building,$room,$building,$room,$class,$subject,$subject);$stmt->execute();
+            $stmt=$this->db->prepare("SELECT t.id,t.class_id,t.building_name,t.class_hall_name,t.subject_id,ts.subcode AS existing_subcode,ts.curr_sub_id AS existing_curr_sub_id FROM class_timetables t JOIN classes c ON c.id=t.class_id JOIN class_timings ct ON ct.id=t.Hour LEFT JOIN subjects ts ON ts.id=t.subject_id WHERE t.weekday=? AND ct.start_time<? AND ct.end_time>? AND c.start_date<=? AND c.end_date>=? AND ((t.class_id=? AND (? IS NULL OR t.subject_id IS NULL OR t.subject_id=?)) OR (t.class_id!=? AND ?<>'' AND ?<>'' AND t.building_name=? AND t.class_hall_name=? AND NOT (? IS NOT NULL AND t.subject_id IS NOT NULL AND ((ts.subcode IS NOT NULL AND LOWER(TRIM(ts.subcode))=LOWER(TRIM(?))) OR (? IS NOT NULL AND ts.curr_sub_id IS NOT NULL AND ts.curr_sub_id=?)))) OR (t.class_id!=? AND ? IS NOT NULL AND EXISTS(SELECT 1 FROM faculty_sub a JOIN faculty_sub b ON b.faculty_id=a.faculty_id WHERE a.sub_id=? AND b.sub_id=t.subject_id) AND NOT (t.subject_id IS NOT NULL AND ((ts.subcode IS NOT NULL AND LOWER(TRIM(ts.subcode))=LOWER(TRIM(?))) OR (? IS NOT NULL AND ts.curr_sub_id IS NOT NULL AND ts.curr_sub_id=?)) AND ((t.building_name=? AND t.class_hall_name=?) OR (?='' AND ?='') OR (t.building_name='' AND t.class_hall_name=''))))) FOR UPDATE");
+            $stmt->bind_param('sssssiiiissssisiiiiisiissss',$weekday,$slot['end_time'],$slot['start_time'],$c['end_date'],$c['start_date'],$class,$subject,$subject,$class,$building,$room,$building,$room,$subject,$code,$currSubId,$currSubId,$class,$subject,$subject,$code,$currSubId,$currSubId,$building,$room,$building,$room);$stmt->execute();
             if($conflict=$stmt->get_result()->fetch_assoc()){
                 if((int)$conflict['class_id']===$class){
                     if($subject!==null&&!empty($conflict['subject_id'])&&(int)$conflict['subject_id']===$subject){throw new \DomainException('This subject is already scheduled for this class in this period.');}
