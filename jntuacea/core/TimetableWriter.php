@@ -21,9 +21,18 @@ final class TimetableWriter
             $code=trim($activity??'');
             if($subject){$stmt=$this->db->prepare('SELECT subcode FROM subjects WHERE id=? AND class_id=?');$stmt->bind_param('ii',$subject,$class);$stmt->execute();$r=$stmt->get_result()->fetch_row();if(!$r){throw new \DomainException('Select a subject belonging to this class.');}$code=$r[0];}
             elseif($code===''){throw new \InvalidArgumentException('Select a subject or enter an activity.');}
-            $stmt=$this->db->prepare("SELECT t.id,t.class_id,t.building_name,t.class_hall_name,t.subject_id FROM class_timetables t JOIN classes c ON c.id=t.class_id JOIN class_timings ct ON ct.id=t.Hour WHERE t.weekday=? AND ct.start_time<? AND ct.end_time>? AND c.start_date<=? AND c.end_date>=? AND (t.class_id=? OR (?<>'' AND ?<>'' AND t.building_name=? AND t.class_hall_name=?) OR (? IS NOT NULL AND EXISTS(SELECT 1 FROM faculty_sub a JOIN faculty_sub b ON b.faculty_id=a.faculty_id WHERE a.sub_id=? AND b.sub_id=t.subject_id))) FOR UPDATE");
-            $stmt->bind_param('sssssissssii',$weekday,$slot['end_time'],$slot['start_time'],$c['end_date'],$c['start_date'],$class,$building,$room,$building,$room,$subject,$subject);$stmt->execute();
-            if($stmt->get_result()->fetch_row()){throw new \DomainException('This period overlaps an existing class, faculty, or room booking.');}
+            $stmt=$this->db->prepare("SELECT t.id,t.class_id,t.building_name,t.class_hall_name,t.subject_id FROM class_timetables t JOIN classes c ON c.id=t.class_id JOIN class_timings ct ON ct.id=t.Hour WHERE t.weekday=? AND ct.start_time<? AND ct.end_time>? AND c.start_date<=? AND c.end_date>=? AND ((t.class_id=? AND (? IS NULL OR t.subject_id IS NULL OR t.subject_id=?)) OR (t.class_id!=? AND ?<>'' AND ?<>'' AND t.building_name=? AND t.class_hall_name=?) OR (t.class_id!=? AND ? IS NOT NULL AND EXISTS(SELECT 1 FROM faculty_sub a JOIN faculty_sub b ON b.faculty_id=a.faculty_id WHERE a.sub_id=? AND b.sub_id=t.subject_id))) FOR UPDATE");
+            $stmt->bind_param('sssssiiiiissssiii',$weekday,$slot['end_time'],$slot['start_time'],$c['end_date'],$c['start_date'],$class,$subject,$subject,$class,$building,$room,$building,$room,$class,$subject,$subject);$stmt->execute();
+            if($conflict=$stmt->get_result()->fetch_assoc()){
+                if((int)$conflict['class_id']===$class){
+                    if($subject!==null&&!empty($conflict['subject_id'])&&(int)$conflict['subject_id']===$subject){throw new \DomainException('This subject is already scheduled for this class in this period.');}
+                    throw new \DomainException('This period overlaps an existing class activity or schedule.');
+                }
+                if($building!==''&&$room!==''&&$conflict['building_name']===$building&&$conflict['class_hall_name']===$room){
+                    throw new \DomainException("Room {$building} - {$room} is already booked for another class at this time.");
+                }
+                throw new \DomainException('Assigned faculty has a scheduling conflict with another class at this time.');
+            }
             $stmt=$this->db->prepare('INSERT INTO class_timetables(class_id,weekday,Hour,subject_code,subject_id,building_name,class_hall_name) VALUES (?,?,?,?,?,?,?)');$stmt->bind_param('isisiss',$class,$weekday,$hour,$code,$subject,$building,$room);$stmt->execute();$id=$this->db->insert_id;
             if(!empty($this->actor['userid'])){
                 $actor=(int)$this->actor['userid'];$username=$this->actor['user'];$role=$this->actor['role'];$entity=(string)$id;
