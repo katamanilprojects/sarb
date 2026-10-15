@@ -1,0 +1,15 @@
+# Disable directory listing / browsing across the entire site
+Options -Indexes
+
+# Protect sensitive files and configuration
+<FilesMatch "^(\.env|\.git|\.htaccess|\.htpasswd|.*\.sql|.*\.log|dbcredentials\.class\.php|composer\.(json|lock))$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Apache 2.4+ Require directive compatibility
+<IfModule mod_authz_core.c>
+    <FilesMatch "^(\.env|\.git|\.htaccess|\.htpasswd|.*\.sql|.*\.log|dbcredentials\.class\.php|composer\.(json|lock))$">
+        Require all denied
+    </FilesMatch>
+</IfModule>

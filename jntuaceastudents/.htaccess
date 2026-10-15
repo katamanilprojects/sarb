@@ -1,0 +1,65 @@
+# 1. Disable Directory Browsing
+# Prevents visitors from seeing a list of your files if they guess a folder name.
+Options -Indexes
+
+# 2. Protect Critical Configuration & Class Files
+# Blocks direct browser access to your internal logic and database password.
+<FilesMatch "\.(class\.php|txt|log|sh|sql|md)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# 3. Explicitly Protect the Database Credentials File (Double Safety)
+<Files "dbcredentials.class.php">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</Files>
+
+# 4. Block Access to the 'logs', 'config', and 'services' Directories
+# Prevents anyone from reading error/activity logs, secrets, or internal service classes directly.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^logs/ - [F,L]
+    RewriteRule ^config/ - [F,L]
+    RewriteRule ^services/ - [F,L]
+</IfModule>
+
+# 5. Security Headers (Best Practice)
+# Protects against Clickjacking and some XSS attacks.
+<IfModule mod_headers.c>
+    # Prevents your site from being framed by other sites (Clickjacking protection)
+    Header set X-Frame-Options "SAMEORIGIN"
+    # Prevents browsers from trying to mime-sniff the content-type
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# 6. Block access to Dotfiles (like .htaccess itself or .git)
+<FilesMatch "^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# 7. Block Common Bad Bots and Scrapers
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Block requests with no User Agent (common in poor scripts)
+    RewriteCond %{HTTP_USER_AGENT} ^$ [OR]
+    # Block common scraping tools
+    RewriteCond %{HTTP_USER_AGENT} (libwww-perl|wget|python|nikto|curl|scan|java|winhttp|clshttp|loader) [NC]
+    RewriteRule .* - [F,L]
+</IfModule>

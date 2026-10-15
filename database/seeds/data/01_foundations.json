@@ -1,0 +1,115 @@
+{
+  "academic_years": [
+    {
+      "acad_year": "2025-2026",
+      "status": 1
+    }
+  ],
+  "programs": [
+    {
+      "program_code": "A",
+      "prog_shortname": "B.Tech",
+      "prog_fullname": "Bachelor of Technology"
+    },
+    {
+      "program_code": "F",
+      "prog_shortname": "M.C.A",
+      "prog_fullname": "Master of Computer Applications"
+    },
+    {
+      "program_code": "D",
+      "prog_shortname": "M.Tech",
+      "prog_fullname": "Master of Technology"
+    }
+  ],
+  "regulations": [
+    {
+      "regulation": "R23",
+      "prog_code": "A"
+    },
+    {
+      "regulation": "R20",
+      "prog_code": "A"
+    },
+    {
+      "regulation": "R20",
+      "prog_code": "F"
+    },
+    {
+      "regulation": "R21",
+      "prog_code": "D"
+    }
+  ],
+  "blooms_levels": [
+    { "blooms_level": "1", "blooms_label": "Remember" },
+    { "blooms_level": "2", "blooms_label": "Understand" },
+    { "blooms_level": "3", "blooms_label": "Apply" },
+    { "blooms_level": "4", "blooms_label": "Analyze" },
+    { "blooms_level": "5", "blooms_label": "Evaluate" },
+    { "blooms_level": "6", "blooms_label": "Create" }
+  ],
+  "buildings": [
+    {
+      "building_name": "TEST - APJ Abdul Kalam Academic Block",
+      "status": 1
+    }
+  ],
+  "halls": [
+    {
+      "building_name": "TEST - APJ Abdul Kalam Academic Block",
+      "hall_name": "TEST-LH-101 (Lecture Hall)",
+      "status": 1
+    },
+    {
+      "building_name": "TEST - APJ Abdul Kalam Academic Block",
+      "hall_name": "TEST-LAB-201 (Computing Lab)",
+      "status": 1
+    }
+  ],
+  "class_timings": [
+    { "timing_id": 1, "hour": "Hr.1", "hour_desc": "Hour - 1", "start_time": "09:30:00", "end_time": "10:30:00" },
+    { "timing_id": 1, "hour": "Hr.2", "hour_desc": "Hour - 2", "start_time": "10:30:00", "end_time": "11:30:00" },
+    { "timing_id": 1, "hour": "Hr.3", "hour_desc": "Hour - 3", "start_time": "11:30:00", "end_time": "12:30:00" },
+    { "timing_id": 1, "hour": "Hr.4", "hour_desc": "Hour - 4", "start_time": "14:00:00", "end_time": "15:00:00" },
+    { "timing_id": 1, "hour": "Hr.5", "hour_desc": "Hour - 5", "start_time": "15:00:00", "end_time": "16:00:00" },
+    { "timing_id": 1, "hour": "Hr.6", "hour_desc": "Hour - 6", "start_time": "16:00:00", "end_time": "17:00:00" }
+  ],
+  "attendance_rules": [
+    {
+      "reg_code": "R23",
+      "prog_code": "A",
+      "criteria": "overall_percentage",
+      "operator1": ">=",
+      "value1": 75,
+      "operator2": "<=",
+      "value2": 100
+    },
+    {
+      "reg_code": "R23",
+      "prog_code": "A",
+      "criteria": "overall_percentage",
+      "operator1": ">=",
+      "value1": 65,
+      "operator2": "<",
+      "value2": 75
+    },
+    {
+      "reg_code": "R23",
+      "prog_code": "A",
+      "criteria": "overall_percentage",
+      "operator1": ">=",
+      "value1": 0,
+      "operator2": "<",
+      "value2": 65
+    },
+    {
+      "reg_code": "R23",
+      "prog_code": "A",
+      "criteria": "subject_wise_percentage",
+      "operator1": ">=",
+      "value1": 0,
+      "operator2": "<",
+      "value2": 40
+    }
+  ]
+}

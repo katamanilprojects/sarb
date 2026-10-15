@@ -1,0 +1,88 @@
+# ========================================================
+# Git Ignore for Academic Attendance & Examination ERP Platform
+# (classattendance.in)
+# ========================================================
+
+# 1. Environment & Sensitive Credentials
+.env
+.env.*
+!.env.example
+*.env
+.env.php
+*.local.php
+*.local.json
+.devin/
+.continue/
+
+# 2. Composer & Third-Party Dependencies
+vendor/
+*/vendor/
+composer.phar
+
+# 3. Operating System & Editor Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# 4. Legacy, Backups, and Scratch Archives
+ignore_old/
+resultsold/
+database/dumps/
+*.dump
+*.tar
+*.tar.gz
+*.zip
+*.rar
+*.7z
+*.bak
+*.old
+*.orig
+
+# 5. Database Dumps vs Versioned Migrations
+*.sql
+*.sql.gz
+!database/migrations/*.sql
+!database/migrations/archive/*.sql
+!database/baselines/*.sql
+
+# 6. Runtime Logs
+logs/*
+*/logs/*
+!*/logs/.htaccess
+!*/logs/.gitkeep
+*.log
+
+# 7. User Uploads, Temp Files & Generated Artifacts
+uploads/*
+*/uploads/*
+!*/uploads/.gitkeep
+!*/uploads/index.php
+*/uploads/permissions/*
+!*/uploads/permissions/.gitkeep
+!*/uploads/permissions/index.php
+*/uploads/tmp/*
+!*/uploads/tmp/.gitkeep
+!*/uploads/student_docs/
+!*/uploads/student_docs/.gitkeep
+!*/uploads/student_docs/.htaccess
+*/uploads/student_docs/*
+!*/uploads/student_docs/.htaccess
+!*/uploads/student_docs/.gitkeep
+tmp/
+*/tmp/
+
+# 8. Large Generated Manual PDFs
+*_manual_*.pdf
+fac_user_manual*.pdf
+hod_manual*.pdf

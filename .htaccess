@@ -1,0 +1,20 @@
+# The workspace contains database migrations and local configuration, not public downloads.
+Options -Indexes
+<FilesMatch "(?i)(^\.|\.(?:sql|dump|log|bak|zip|tar|7z|rar)(?:\.gz)?$|^composer\.(?:json|lock)$)">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule "(^|/)\.(?!well-known(?:/|$))" - [F,L]
+</IfModule>
+
+# Local inspection and reconciliation documents are opened from the workspace.
+<FilesMatch "^(?:standardisation-implementation|historical-data-review|college-standardisation-review)-.*\.md$">
+    Require all denied
+</FilesMatch>

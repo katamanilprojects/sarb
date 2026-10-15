@@ -1,0 +1,406 @@
+.view-toggle {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .view-toggle {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-bottom: 15px;
+    }
+    
+    .view-toggle .btn {
+        border-radius: 8px;
+    }
+    
+    #listView {
+        display: none;
+    }
+}
+
+@media (max-width: 767px) {
+    .view-toggle {
+        display: none !important;
+    }
+    
+    #gridView {
+        display: none !important;
+    }
+    
+    #listView {
+        display: block !important;
+    }
+}
+
+.day-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    margin-bottom: 15px;
+    overflow: hidden;
+}
+
+.day-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 15px;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.period-item {
+    padding: 12px 15px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.period-item:last-child {
+    border-bottom: none;
+}
+
+.period-time {
+    font-size: 0.85rem;
+    color: #718096;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.period-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.period-badge {
+    width: 4px;
+    height: 50px;
+    border-radius: 2px;
+}
+
+.period-badge.theory {
+    background: #4299e1;
+}
+
+.period-badge.lab {
+    background: #48bb78;
+}
+
+.period-details {
+    flex: 1;
+}
+
+.period-code-list {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #2d3748;
+    margin-bottom: 4px;
+}
+
+.period-type-list {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.period-type-list.theory {
+    background: #4299e1;
+    color: white;
+}
+
+.period-type-list.lab {
+    background: #48bb78;
+    color: white;
+}
+
+.period-location-list {
+    font-size: 0.8rem;
+    color: #718096;
+}
+
+.free-period {
+    text-align: center;
+    padding: 20px;
+    color: #a0aec0;
+    font-style: italic;
+}
+
+.timetable-grid {
+    background: #ffffff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.timetable-grid table {
+    margin-bottom: 0;
+    table-layout: fixed;
+    width: 100%;
+}
+
+.timetable-grid th {
+    font-weight: 600;
+    text-align: center;
+    vertical-align: middle;
+    padding: 16px 10px;
+    border: 1px solid #e2e8f0;
+}
+
+.timetable-grid .day-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 0.95rem;
+    position: sticky;
+    left: 0;
+    z-index: 20;
+    min-width: 100px;
+}
+
+.timetable-grid .time-header {
+    background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+    color: white;
+    font-size: 0.85rem;
+    min-width: 140px;
+}
+
+.timetable-grid td {
+    padding: 8px;
+    vertical-align: middle;
+    border: 1px solid #e2e8f0;
+    min-height: 100px;
+    background: #fafafa;
+}
+
+.timetable-grid tbody td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+    font-weight: 600;
+    color: #2d3748;
+}
+
+.period-card {
+    background: white;
+    border-radius: 8px;
+    padding: 12px;
+    min-height: 90px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.period-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.period-card.theory {
+    border-left: 4px solid #4299e1;
+    background: linear-gradient(135deg, #ebf8ff 0%, #ffffff 100%);
+}
+
+.period-card.lab {
+    border-left: 4px solid #48bb78;
+    background: linear-gradient(135deg, #f0fff4 0%, #ffffff 100%);
+}
+
+.period-card.free {
+    background: #f7fafc;
+    border: 2px dashed #cbd5e0;
+    color: #a0aec0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 90px;
+}
+
+.period-card.multiple-classes {
+    border-left: 4px solid #ed8936;
+    background: linear-gradient(135deg, #fffaf0 0%, #ffffff 100%);
+}
+
+.class-list {
+    font-size: 0.75rem;
+    color: #2d3748;
+    margin-top: 4px;
+    font-weight: 600;
+}
+
+.consecutive-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #ed8936;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.time-range {
+    font-size: 0.7rem;
+    color: #718096;
+    margin-top: 6px;
+    font-style: italic;
+}
+
+.extra-hour-header {
+    background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%) !important;
+    font-size: 0.75rem !important;
+}
+
+.extra-hour-label {
+    display: block;
+    font-size: 0.65rem;
+    color: #718096;
+    font-weight: 400;
+    margin-top: 2px;
+}
+
+.period-code {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #2d3748;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.period-type {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.period-type.theory {
+    background: #4299e1;
+    color: white;
+}
+
+.period-type.lab {
+    background: #48bb78;
+    color: white;
+}
+
+.period-location {
+    font-size: 0.75rem;
+    color: #718096;
+    margin-top: 4px;
+}
+
+.period-location i {
+    margin-right: 4px;
+}
+
+.current-period {
+    border: 3px solid #f6ad55 !important;
+    box-shadow: 0 0 15px rgba(246, 173, 85, 0.5) !important;
+}
+
+.stats-card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+}
+
+.stats-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+@media (max-width: 767px) {
+    .stats-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .stats-card h3 {
+        font-size: 1.5rem;
+    }
+    
+    .stats-card h5 {
+        font-size: 0.85rem;
+    }
+}
+
+.status-free, .status-in-class, .status-no-period {
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
+}
+
+.status-icon {
+    font-size: 2.5rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.status-content {
+    flex: 1;
+}
+
+.status-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #2d3748;
+}
+
+.location-details {
+    background: #f8fafc;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-top: 8px;
+    border-left: 3px solid #3b82f6;
+}
+
+.location-details > div {
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+    color: #4a5568;
+}
+
+.location-details > div:last-child {
+    margin-bottom: 0;
+}
+
+.next-class-info {
+    margin-top: 10px;
+    font-size: 0.875rem;
+    color: #856404;
+    background: #fff3cd;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border-left: 3px solid #ffc107;
+}
+
+#nextRefreshTime {
+    font-family: 'Courier New', monospace;
+}
+
+.time-badge {
+    display: inline-block;
+    background: #e0f2fe;
+    color: #0369a1;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+}

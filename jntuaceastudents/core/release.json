@@ -1,0 +1,22 @@
+{
+    "version": "2026.10.08.2",
+    "files": {
+        "AIProvider.php": "cd567f03a046da95c4e74bfd3eeda9ab62f856b8ffc6f70ceef2a944f441fee9",
+        "AssessmentPolicy.php": "0045b3848356bbf69fbb9549c6f40092734a47483a34064ee4458ec2b30d20c3",
+        "AttainmentCalculator.php": "859f15f4bd81dffd3d1df9ff4e4e05fa039428c98d2f46446b61176f5f304b65",
+        "AttendanceCalculator.php": "24ae7e1a87961aeb73d350731ee55c20b81f5884c2a6fc322bcf13fc05ad1edb",
+        "AttendanceCorrection.php": "ee5c717296333f5ef8e222962edb545818ef88935a675f25d95573a05fc870ff",
+        "AttendanceService.php": "15694811f9598a698a1b360e6a19332d3587eb37051677626e58fa5ffde9f937",
+        "CertificateNumber.php": "a0eb622b2c42dc55989cf18a2b715fdcb513b86828cb1267adcb11334cd1d8a4",
+        "Clock.php": "a4c63d03093e7c3fbe4a3d650744c7041cb9b7dbc0f8cdb85b0262b33411eda9",
+        "Connection.php": "2860413841b59799cfb51af067ced74a94475ba05051cf070cf5a103a22e81a4",
+        "DocumentStorage.php": "9f95b9afa0edbcd18f79bbc011be28feedd1e4037a66611343ebc70c8751f1fd",
+        "MarksNormalizer.php": "eb5bf633549b363f9f4329159a49582bc1f60cd5b166926724048d58e5b8ea7f",
+        "RecordScope.php": "48be6f2157d5d751006abb78678f052591ebb05b7ddc15e01415f208c8e728ab",
+        "ReportValue.php": "4c9d48d4b6730639fbd64f2614a0bd462a07a56a22852ec63e6558bad102f753",
+        "RequestSecurity.php": "c99be96a110ab16d8c19ef91adf2f02e374f2189016d564c57a55a0f5d445fd1",
+        "ResultsCsv.php": "c92146d4e07f345b46b799158d59740079fd4972dbd1d994917134b32e2c64de",
+        "SubjectCatalog.php": "ee46b7a25ed11ab9ba6ecc62c10f00a2da3d1c19cd378831f42fa7df3e8fbf1a",
+        "TimetableWriter.php": "6714734ed65ab7b28587af6a2654ef16288da2ea1d6f28eeb73ff09597f50681"
+    }
+}
