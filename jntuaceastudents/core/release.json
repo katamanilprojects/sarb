@@ -14,7 +14,7 @@
         "MarksNormalizer.php": "eb5bf633549b363f9f4329159a49582bc1f60cd5b166926724048d58e5b8ea7f",
         "RecordScope.php": "48be6f2157d5d751006abb78678f052591ebb05b7ddc15e01415f208c8e728ab",
         "ReportValue.php": "4c9d48d4b6730639fbd64f2614a0bd462a07a56a22852ec63e6558bad102f753",
-        "RequestSecurity.php": "c99be96a110ab16d8c19ef91adf2f02e374f2189016d564c57a55a0f5d445fd1",
+        "RequestSecurity.php": "369a50e6e74d0494c1455593248c1ef1d87670290d051b5468e39136adce0e9f",
         "ResultsCsv.php": "c92146d4e07f345b46b799158d59740079fd4972dbd1d994917134b32e2c64de",
         "SubjectCatalog.php": "ee46b7a25ed11ab9ba6ecc62c10f00a2da3d1c19cd378831f42fa7df3e8fbf1a",
         "TimetableWriter.php": "6714734ed65ab7b28587af6a2654ef16288da2ea1d6f28eeb73ff09597f50681"

@@ -120,7 +120,9 @@ final class RequestSecurity
             foreach (['class_id', 'cls_id'] as $key) {
                 if (!empty($input[$key])) { $scope->classRecord((int)$input[$key]); }
             }
-            $subject = $input['sub_id'] ?? $input['subject_id'] ?? null;
+            $isMapping = in_array($input['whattodo'] ?? '', ['addstudents', 'unmapstudents'], true)
+                || str_contains(basename($_SERVER['SCRIPT_FILENAME'] ?? ''), 'mapstudent');
+            $subject = $isMapping ? null : ($input['sub_id'] ?? $input['subject_id'] ?? null);
             $subject = is_scalar($subject) && (int)$subject > 0 ? (int)$subject : null;
             foreach (['student_id', 'stu_id', 'stu_ids'] as $key) {
                 if (!empty($input[$key])) {
