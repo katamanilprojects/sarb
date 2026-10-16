@@ -1,6 +1,6 @@
 # Examination Results Publication & SEE Auto-Sync Workflow
 
-This document details the lifecycle for examination notification creation, bulk result ingestion via CSV, UGC 10-point scale grade conversion, legacy exam result scheme normalization, 3-tier Semester End Examination (SEE) Course Outcome attainment distribution, CIA vs Exam Internal reconciliation audit, and student self-service grade card viewing across general and subject portals.
+This document details the lifecycle for examination notification creation, multi-step draft/review/publication governance, bulk result ingestion via CSV (`core/ResultsCsv.php`), fractional grade point conversion, legacy exam result scheme normalization, Semester End Examination (SEE) Course Outcome attainment distribution, CIA vs Exam Internal reconciliation audit, and student self-service grade card viewing across general and subject portals.
 
 ---
 
@@ -14,28 +14,29 @@ In many autonomous institutions, semester end examinations are evaluated central
 
 ### 1.2 The Integrated Solution
 The Results Publication subsystem bridges the Examination Branch, Department Faculty, and Students:
-1. **Academic Section / Exam Cell**: Publishes official semester exam notifications, uploads verified university CSV result rosters (fully backward compatible with legacy university formats), reviews preview tables, audits CIA discrepancies, and toggles results live (`is_published = 1`).
-2. **Autonomous 3-Tier SEE Attainment**: As SEE completes the direct attainment cycle, external marks are ingested and mapped across Course Outcomes through three complementary tiers: Question-wise entry (Tier 1), QP metadata distribution (Tier 2), or Regulation grade band midpoint distribution across all COs (Tier 3).
-3. **Continuous Internal Assessment (CIA) Reconciliation Audit**: Live portal-calculated internal assessment marks (Mid 1, Mid 2, Assignments, Quizzes, Lab Day-to-Day) are audited against final uploaded internal marks (`im`), highlighting rounding variances ($\le 1.0$) and significant discrepancies ($> 1.0$).
-4. **Student Portal**: Students immediately access their official semester grade cards with letter grades, credits, grade points, and automatically calculated SGPA in `studentresults.php`, view subject-specific SEE results in `studentsubatt.php`, and check exam statuses in `studentsubjects.php`.
-5. **Faculty SEE Marks Auto-Sync**: In `facseemarks.php`, faculty select **Mode C (Sync from Published Results)** to pull external examination scores directly into `external_assessment_marks`, automatically populating direct SEE attainment models.
+1. **Academic Section / Exam Cell (`academicsectionresults.php`)**: Creates semester exam notifications (`workflow_status = 'DRAFT'`, `exam_type = 'REGULAR' | 'SUPPLEMENTARY' | 'REVALUATION'`), previews and imports verified university CSV result rosters (`previewCsv()` &rarr; `importCsv()` via `\College\ResultsCsv`, `\College\ResultsPolicy`, and `\College\ResultRow`), reviews imported rosters (`reviewNotification()` &rarr; `REVIEWED`), audits CIA discrepancies, and publishes results (`togglePublishStatus()` &rarr; `PUBLISHED`, `is_published = 1`). Publishing a `REGULAR` notification automatically synchronizes available SEE evidence inside the same database transaction via `\College\ResultsSeeSync` while preserving manual and question-wise SEE marks. Withdrawing a published notification marks dependent SEE evidence stale (`is_stale = 1`) without invalidating manual/question-wise marks.
+2. **Independent Attainment CSV Import (`attainmentimport.php`)**: For colleges or courses not using central result publication, `Services\AttainmentImportService` previews and commits external aggregate, gross/net scaled, grade-derived, or question-wise CSV evidence (`attainment_import_batches`) directly into SEE attainment records.
+3. **Multi-Mode SEE Attainment (`core/AttainmentCalculator.php` & `seeassessment.class.php`)**: Evaluates each student's SEE evidence individually across detailed question scores (`DETAILED_QP`), aggregate direct/synced/imported marks (`DIRECT_ENTRY`, `PUBLISHED_RESULT_SYNC`, `IMPORT_DIRECT`, `IMPORT_SCALED`), or grade-band estimates (`GRADE_ESTIMATE`), reporting measured, estimated, and missing student counts separately.
+4. **Continuous Internal Assessment (CIA) Reconciliation Audit**: Live portal-calculated internal assessment marks (Mid 1, Mid 2, Assignments, Quizzes, Lab Day-to-Day) are audited against final uploaded internal marks (`im`), highlighting rounding variances ($\le 1.0$) and significant discrepancies ($> 1.0$).
+5. **Student Portal (`studentresults.php`, `studentsubatt.php`, `studentsubjects.php` via `\College\PublishedResults`)**: Students access only their own published results matched to exact course offerings. Regular, supplementary, and revaluation attempts are rendered as separate attempt cards (with supplementary/revaluation averages labeled as attempt GPA and withheld results marked with pending GPA).
+6. **Audited Faculty SEE Marks Auto-Sync (`facseemarks.php` via `\College\ResultsSeeSync`)**: Faculty can also trigger synchronization from a published `REGULAR` notification in Mode C (`SUPPLEMENTARY` and `REVALUATION` results never overwrite regular OBE evidence). Replacing existing marks requires explicit confirmation and a mandatory reason, preserving before/after snapshots in `academic_record_snapshots`.
 
 ---
 
-## 2. UGC 10-Point Scale & SGPA Computation
+## 2. UGC Grade Scale & Fractional SGPA Computation
 
-The system uses standard autonomous UGC grading scales implemented inside `ExamResultsService::getGradePoints()`:
+The system supports standard autonomous UGC 10-point grading scales as well as regulation-specific fractional grade points (`exam_results.grade_points` `decimal(13,3)`) and custom `grade_bands` configured via `AttainmentPolicyService`:
 
-| Letter Grade | Description | Marks Range (%) | Grade Points ($GP_i$) | Result Status |
+| Letter Grade | Description | Marks Range (%) | Default Grade Points ($GP_i$) | Result Status |
 | :---: | :---: | :---: | :---: | :---: |
-| **O** | Outstanding | $\ge 90\%$ | 10 | PASS |
-| **S** | Excellent | $80\% - 89\%$ | 9 | PASS |
+| **O** / **S** | Outstanding | $\ge 90\%$ | 10 | PASS |
+| **A+** / **EX** | Excellent | $80\% - 89\%$ | 9 | PASS |
 | **A** | Very Good | $70\% - 79\%$ | 8 | PASS |
-| **B** | Good | $60\% - 69\%$ | 7 | PASS |
-| **C** | Fair | $50\% - 59\%$ | 6 | PASS |
-| **D** | Satisfactory | $40\% - 49\%$ | 5 | PASS |
-| **E** | Pass | $35\% - 39\%$ | 4 | PASS |
-| **F** | Fail | $< 35\%$ | 0 | FAIL |
+| **B+** | Good | $60\% - 69\%$ | 7 | PASS |
+| **B** | Above Average | $50\% - 59\%$ | 6 | PASS |
+| **C** | Average | $45\% - 49\%$ | 5 | PASS |
+| **D** / **P** / **E** | Pass | $35\% / 40\% - 44\%$ | 4 | PASS |
+| **F** | Fail | $< 35\% / 40\%$ | 0 | FAIL |
 | **ABSENT** / **Ab** | Absent | Absent | 0 | ABSENT |
 | **MP** | Malpractice | Disqualified | 0 | MALPRACTICE |
 | **W** / **WH** | Withheld | Pending | 0 | WITHHELD |
@@ -44,7 +45,7 @@ The system uses standard autonomous UGC grading scales implemented inside `ExamR
 $$\text{SGPA} = \frac{\sum_{i=1}^{n} (C_i \times GP_i)}{\sum_{i=1}^{n} C_i}$$
 Where:
 - $C_i$ = Credits assigned to course $i$
-- $GP_i$ = Grade points earned in course $i$
+- $GP_i$ = Grade points earned in course $i$ (preserving fractional precision when configured)
 - Courses with letter grade `F`, `ABSENT`, or `MP` are included in the denominator $\sum C_i$ with $GP_i = 0$, properly reflecting academic standing.
 
 ---
@@ -56,69 +57,69 @@ sequenceDiagram
     autonumber
     actor ExamSection as Academic Section / Exam Cell
     participant ResUI as academicsectionresults.php
-    participant Service as ExamResultsService.php
-    participant AttCalc as AttainmentCalculator.php / SEEAssessment
-    participant DB as MariaDB (exam_*, external_assessment_marks)
+    participant Service as services/ExamResultsService.php
+    participant AttCalc as core/AttainmentCalculator.php & seeassessment.class.php
+    participant DB as MariaDB (exam_*, external_assessment_marks, snapshots)
     actor Student
     participant StuUI as studentresults.php / studentsubatt.php
     actor Faculty
     participant FacUI as facseemarks.php
 
-    Note over ExamSection,ResUI: Step 1: Create Examination Notification
-    ExamSection->>ResUI: Create Notification (e.g. B.Tech R20 IV-I Regular Dec-2024)
-    ResUI->>Service: createNotification(title, acad_year, reg_id, yearsem, exam_month_year)
-    Service->>DB: INSERT INTO exam_notifications (is_published = 0)
+    Note over ExamSection,ResUI: Step 1: Create Examination Notification (DRAFT)
+    ExamSection->>ResUI: Create Notification (e.g. B.Tech R20 IV-I Regular, exam_type='REGULAR')
+    ResUI->>Service: createNotification(data, user_id)
+    Service->>DB: INSERT INTO exam_notifications (workflow_status='DRAFT', is_published=0)
 
-    Note over ExamSection,ResUI: Step 2: Upload CSV Result Roster (Legacy / Modern)
-    ExamSection->>ResUI: Upload CSV file containing roll numbers, subcodes, marks & grades
-    ResUI->>Service: importResultsCsv(notification_id, csv_file_path)
-    Service->>DB: Parse CSV (normalize std_regno, im, em, P/F, MP) & INSERT INTO exam_results
-    ResUI-->>ExamSection: Display preview statistics & student roster
+    Note over ExamSection,ResUI: Step 2: Preview & Import CSV Result Roster
+    ExamSection->>ResUI: Upload CSV file (modern or legacy resultsold schema)
+    ResUI->>Service: previewCsv(notification_id, csv_path) & importCsv(notification_id, csv_path, user_id)
+    Service->>DB: Parse via College\ResultsCsv & INSERT INTO exam_results (atomic draft import)
 
-    Note over ExamSection,ResUI: Step 3: CIA vs Exam Internal Reconciliation Audit
-    ExamSection->>ResUI: Select "Audit CIA" / Tab 3 Reconciliation
-    ResUI->>Service: getNotificationCiaDiscrepancies(notification_id)
-    Service->>DB: Compute portal CIA (Mids/Assgn) vs uploaded internal_marks
-    ResUI-->>ExamSection: Display Discrepancy KPI cards & export reconciliation CSV
+    Note over ExamSection,ResUI: Step 3: Review & CIA Discrepancy Audit
+    ExamSection->>ResUI: Audit CIA vs Uploaded Internal & Mark Notification Reviewed
+    ResUI->>Service: getNotificationCiaDiscrepancies(notification_id) & reviewNotification(notification_id, user_id, remarks)
+    Service->>DB: UPDATE workflow_status='REVIEWED' & INSERT workflow_review_history
 
-    Note over ExamSection,ResUI: Step 4: Publish Notification
-    ExamSection->>ResUI: Toggle Publish Status (is_published = 1)
-    ResUI->>Service: togglePublishStatus(notification_id, 1)
-    Service->>DB: UPDATE exam_notifications SET is_published = 1
+    Note over ExamSection,ResUI: Step 4: Publish Notification & Transactional SEE Sync
+    ExamSection->>ResUI: Publish Notification
+    ResUI->>Service: togglePublishStatus(notification_id, 1, user_id)
+    Service->>DB: UPDATE exam_notifications SET workflow_status='PUBLISHED', is_published=1 & sync regular SEE evidence (College\ResultsSeeSync)
 
     Note over Student,StuUI: Step 5: Student Self-Service Grade Cards
     Student->>StuUI: View semester grade card or enrolled subject in portal
-    StuUI->>Service: getStudentResults / getStudentSubjectResult
-    Service->>DB: SELECT from exam_results
-    StuUI-->>Student: Render semester grade card (SGPA) and subject SEE result badge
+    StuUI->>Service: getStudentResults / getStudentSubjectResult (College\PublishedResults)
+    Service->>DB: SELECT from exam_results (where is_published=1 and exact subject_id match)
+    StuUI-->>Student: Render semester grade card (SGPA / attempt GPA) and subject SEE result badge
 
-    Note over Faculty,FacUI: Step 6: 3-Tier SEE Attainment Auto-Sync
-    Faculty->>FacUI: Open Semester End Exam Marks for Subject
-    FacUI->>Service: syncResultsToSeeMarks(notification_id, subject_id)
-    Service->>DB: Sync external marks or regulation grade midpoint to external_assessment_marks
-    FacUI->>AttCalc: calculateSEECOAttainment(subject_id)
-    AttCalc->>AttCalc: Tier 1 (Detailed QP) / Tier 2 (QP Metadata) / Tier 3 (Grade Range)
-    AttCalc-->>FacUI: Render final direct SEE CO attainment levels (0, 1, 2, 3)
+    Note over Faculty,FacUI: Step 6: Audited SEE Marks Auto-Sync
+    Faculty->>FacUI: Select Published REGULAR Notification & Sync to Subject
+    FacUI->>Service: syncResultsToSeeMarks(notification_id, subject_id, user_id, replace_existing, reason)
+    Service->>DB: Snapshot prior marks (if replacing) & UPSERT external_assessment_marks via College\ResultsSeeSync
+    FacUI->>AttCalc: calculateExternalAttainment(subject_id)
+    AttCalc-->>FacUI: Render direct SEE CO attainment with measured/estimated/missing counts
 ```
 
 ---
 
 ## 4. Step-by-Step Implementation
 
-### Step 1: Notification Creation (`academicsectionresults.php`)
-- **Access Guard**: Authorized for `academic_section`, `admin`, and `superadmin`.
+### Step 1: Notification Creation & Lifecycle (`academicsectionresults.php`)
+- **Access Guard**: Authorized for `academic_section`, `admin`, and `superadmin` (`MOD_RESULTS_PUBLISH`).
 - **Form Parameters**:
   - `notification_code`: Institutional identifier (e.g., `BTECH_R20_3_1_NOV2025`).
-  - `title`: Examination title (e.g., `B.Tech III Year I Sem (R20) Regular & Supple Exams - Nov 2025`).
-  - `program_id`: Degree program (B.Tech, M.Tech, MCA).
-  - `regulation_id`: Regulatory code (e.g., R20, R23).
+  - `title`: Examination title.
+  - `program_id`: Degree program (`programs.id`).
+  - `regulation_id`: Exact regulation ID (`regulations.id`).
   - `academic_year`: Active academic calendar year (e.g., `2024-2025`).
   - `yearsem`: Academic level (`III Yr - I Sem`, `3-1`).
   - `month_year`: Examination session period (e.g., `November 2025`).
+  - `exam_type`: `REGULAR`, `SUPPLEMENTARY`, or `REVALUATION`.
   - `release_date`: Gazette date.
+- **Workflow States (`exam_notifications.workflow_status`)**:
+  - `DRAFT` &rarr; `REVIEWED` (`reviewNotification()`) &rarr; `PUBLISHED` (`togglePublishStatus()`). Published notifications lock their imported result rows against overwrite.
 
-### Step 2: CSV Data Ingestion & Legacy Scheme Normalization
-The ingestion engine in `core/ResultsCsv.php` seamlessly supports modern headers as well as legacy `resultsold` archives:
+### Step 2: CSV Data Ingestion & Legacy Scheme Normalization (`core/ResultsCsv.php`)
+The ingestion engine in `\College\ResultsCsv` seamlessly supports modern headers as well as legacy `resultsold` archives:
 
 | Legacy Header (`resultsold`) | Modern Header | Canonical Property | Notes & Transformations |
 | :--- | :--- | :--- | :--- |
@@ -130,64 +131,39 @@ The ingestion engine in `core/ResultsCsv.php` seamlessly supports modern headers
 | `em` | `external_marks`, `externals` | `external_marks` | `-1` / `AB` / `A` parsed as Absent; `-5` parsed as `NULL`. |
 | `total` | `total_marks`, `total` | `total_marks` | Evaluated or summed from internal + external. |
 | `grade` | `grade_letter`, `grade` | `grade_letter` | `Ab` mapped to `ABSENT`, `F` to `FAIL`, `S`/`A`/`B`/`C`/`D`/`E` to UGC grade. |
-| `grade_points` | `grade_points`, `gradepoints` | `grade_points` | Computed from UGC scale if missing. |
+| `grade_points` | `grade_points`, `gradepoints` | `grade_points` | Preserves fractional `decimal(13,3)` points or computes from grade bands. |
 | `credits` | `credits_registered`, `credits` | `credits_registered`| In legacy dumps, failed students have `credits = 0`; parsed safely without triggering curriculum mismatch rejections. |
 | `result` | `result_status`, `status` | `result_status` | `P` &rarr; `PASS`, `F` &rarr; `FAIL`, `MP` &rarr; `MALPRACTICE`, `W` &rarr; `WITHHELD`. |
 
 ### Step 3: Continuous Internal Assessment (CIA) Reconciliation Audit
-Autonomous regulations stipulate that Continuous Internal Assessment (CIA) marks compiled by course instructors must conform with the final internal marks submitted to the Controller of Examinations:
 - **Audit Tool**: Tab 3 ("CIA vs Exam Internal Reconciliation & Discrepancies") in `academicsectionresults.php`.
 - **Logic**:
-  1. For each student and enrolled subject, `ExamResultsService::calculateStudentPortalCia()` calculates live CIA from faculty assessment entries (Mid 1, Mid 2, Assignments, Lab Day-to-Day) according to regulation rules (80:20 best/second mid weighting for R20/R23 UG theory, continuous evaluation for labs).
+  1. For each student and enrolled subject, `ExamResultsService::calculateStudentPortalCia()` calculates live CIA from faculty assessment entries according to regulation rules.
   2. The calculated CIA is compared against `exam_results.internal_marks` (`uploaded_internal`).
-  3. Discrepancies are categorized:
-     - `MATCH`: Exact match ($\Delta = 0$).
-     - `VARIANCE`: Minor rounding variance ($|\Delta| \le 1.0$), attributable to integer rounding in Mid exams.
-     - `DISCREPANCY`: Significant divergence ($|\Delta| > 1.0$) requiring verification by the Academic Section or Controller of Examinations.
-     - `MISSING_PORTAL_CIA`: Result row present with internal marks, but faculty has not finalized CIA in the portal.
-     - `EXEMPT_OR_MISSING`: Subject is exempt from internals (`im = -7`).
+  3. Discrepancies are categorized into `MATCH` ($\Delta = 0$), `VARIANCE` ($|\Delta| \le 1.0$), `DISCREPANCY` ($|\Delta| > 1.0$), `MISSING_PORTAL_CIA`, or `EXEMPT_OR_MISSING` (`im = -7`).
 - **CSV Export**: Academic Section administrators can download the reconciliation audit log via `?action=export_cia_discrepancy`.
 
-### Step 4: 3-Tier SEE Attainment Distribution Strategy
-Semester End Examinations complete direct Course Outcome attainment in Outcome-Based Education (OBE). To ensure attainment calculation is never blocked, `seeassessment.class.php` and `AttainmentCalculator.php` implement a resilient 3-tier model:
-
-#### Tier 1: Detailed Question-Wise Marks
-- **Precondition**: Faculty have recorded question-by-question marks for Q1 and optional Unit questions (Q2 through Q9) in `external_assessment_marks`.
-- **Allocation**: Marks are allocated directly to the specific COs mapped to each individual question.
-- **Evidence Basis**: `DETAILED_QP`.
-
-#### Tier 2: SEE Question Paper Metadata Distribution
-- **Precondition**: Examination Branch or faculty upload the question paper schema into `see_question_paper_questions` (specifying question numbers, maximum marks, and mapped COs).
-- **Allocation**: Each question's marks are divided equally among its mapped COs:
-  $$\text{Marks}(CO_k) = \sum_{Q \to CO_k} \frac{\text{Marks}(Q)}{|\text{COs}(Q)|}$$
-  Proportions $W_{CO} = \frac{\text{Marks}(CO)}{\text{TotalQP}}$ are computed, and each student's overall external examination score is distributed proportionally across the COs.
-- **Evidence Basis**: `METADATA_DISTRIBUTION`.
-
-#### Tier 3: Published Results & Regulation Grade Band Midpoint Distribution
-- **Precondition**: Only consolidated published results or grade points are available.
-- **Allocation**:
-  - If raw external marks are available: scaled to net maximum marks (70.0 for UG) and distributed across all course COs.
-  - If only letter grade / grade points are available (common in autonomous university dumps where raw external marks are suppressed): the engine queries `regulations.grade_bands_json` (or default autonomous bands) to find the grade band midpoint:
-    $$\text{Midpoint\%} = \frac{\text{Min\%} + \text{Max\%}}{2}$$
-    (e.g., S Grade = 85%, A Grade = 75%, B Grade = 65%). Scaled external marks are computed as $\text{Midpoint\%} \times \text{NetMaxMarks}$ and distributed across all course COs.
-- **Evidence Basis**: `RESULT_SCALE`.
+### Step 4: Multi-Mode SEE Attainment & Audited Auto-Sync
+- **Explicit Notification & Offering Validation (`ExamResultsService::syncResultsToSeeMarks()`)**:
+  - Requires an explicitly selected `PUBLISHED` notification with `exam_type = 'REGULAR'` (supplementary/revaluation imports are refused until attempt-selection policy is configured).
+  - Resolves the configured external maximum from `AttainmentPolicyService` / `curriculum_subjects` / `regulation_course_types` (ignoring missing or stale curriculum links when an explicit policy maximum exists).
+  - If `external_assessment_marks` already exist for the subject, replacement requires `$replaceExisting = true` and a non-empty `$reason`, atomically archiving before/after rows in `academic_record_snapshots` (`entity_type = 'external_marks_sync'`).
+- **Three Complementary Evidence Tiers (`\College\AttainmentCalculator` & `seeassessment.class.php`)**:
+  1. **Detailed Question-Wise Blueprint (`DETAILED_QP`)**: Uses `internal_assessments` (`assessment_number = 'SEE'`), `assessment_components` (`SEE-Theory`, `SEE-Split-A`, `SEE-Split-B`, `SEE-Lab`), `assessment_questions`, `question_co_mapping`, and `student_marks` with per-student choice resolution (`choice_groups`) and equal sharing (`EQUAL_SHARE`) across multi-CO questions.
+  2. **Measured Aggregate External Marks (`DIRECT_ENTRY`, `PUBLISHED_RESULT_SYNC`, `IMPORT_DIRECT`, `IMPORT_SCALED`)**: Scales raw external marks to the course's net external maximum and evaluates against CO thresholds (`measured_students`).
+  3. **Grade-Band Estimate (`GRADE_ESTIMATE:<Grade>:<Policy>`)**: When only letter grades are supplied and a grade-band estimation policy (`midpoint`, `lower`, `upper`) is configured, estimates external score from the grade interval and reports it separately under `estimated_students`.
 
 ### Step 5: Student Portal Subject-Level Visibility
 Students can view examination results across multiple touchpoints:
-1. **Semester Grade Cards (`studentresults.php`)**: Full printable grade sheet with credit points, letter grades, and SGPA.
-2. **Subject Attendance & Assessment Portal (`studentsubatt.php`)**: When `MOD_RESULTS_PUBLISH` is visible, an official **Semester End Examination (SEE) Results & Grade Card** is embedded in the subject overview, displaying internal marks, external marks, total score, letter grade, credits earned, and result status.
-3. **Enrolled Subjects Register (`studentsubjects.php`)**: Displays an **Exam Result** badge alongside class attendance, giving students immediate feedback on course completion.
+1. **Semester Grade Cards (`studentresults.php`)**: Full printable grade sheet with credit points, letter grades, fractional grade points, and SGPA.
+2. **Subject Attendance & Assessment Portal (`studentsubatt.php`)**: Displays the subject's **Semester End Examination (SEE) Results & Grade Card** when `MOD_RESULTS_PUBLISH` is visible.
+3. **Enrolled Subjects Register (`studentsubjects.php`)**: Displays an **Exam Result** badge alongside class attendance.
 
 ### Step 6: Advisory Credit-Based Promotion Pipeline Simulation (`MOD_CREDIT_PROMOTION`)
 - **Safety Guardrail**: Governed by `MOD_CREDIT_PROMOTION` (default disabled, `is_enabled_globally = 0`). Purely an advisory dry-run simulation tool that **never blocks** CSV result ingestion, student grade cards, or result notifications.
-- **Rules Evaluated (R23 Regulation Section 18)**:
-  - **Year 1 &rarr; Year 2**: Admitted students proceed to Year 2 (subject to statutory $75\%$ attendance). Minimum credit threshold: $0\%$.
-  - **Year 2 &rarr; Year 3**: Must earn at least $40\%$ of credits prescribed for Year 1 (Semesters I and II).
-  - **Year 3 &rarr; Year 4**: Must earn at least $40\%$ of total credits prescribed for Years 1 and 2 (Semesters I through IV).
-- **Service Methods (`ExamResultsService.php`)**:
+- **Service Methods (`services/ExamResultsService.php`)**:
   - `evaluateCreditPromotionSimulation($classId, $regulationCode)`: Analyzes earned credits across past terms for enrolled students in the target class, flags at-risk students, and checks for prior committee clearances.
   - `savePromotionCommitteeOverride($studentId, $classId, $action, $remarks, $userId)`: Records manual academic committee clearance into `audit_logs` (`PROMOTION_COMMITTEE_OVERRIDE_SAVED`), displaying `CLEARED BY COMMITTEE` on subsequent simulation evaluations.
-- **UI Integration**: Accessible via Tab 2 ("Credit Promotion Simulation (R23 Sec 18)") in `academicsectionresults.php`.
 
 ---
 
@@ -195,8 +171,9 @@ Students can view examination results across multiple touchpoints:
 
 | Table Name | Description | Key Foreign Keys & Indexes |
 | :--- | :--- | :--- |
-| `exam_notifications` | Master examination event notifications | `program_id` &rarr; `programs(id)`, `regulation_id` &rarr; `regulations(id)` |
-| `exam_results` | Student subject scores, grades, credits, grade points | `notification_id` &rarr; `exam_notifications(id)`, Indexes: `idx_er_student_subject`, `idx_er_htno_subcode` |
-| `external_assessment_marks` | Faculty external assessment register & evidence basis | `sub_id` &rarr; `subjects(id)`, `student_id` &rarr; `students(id)`, `evidence_basis` |
-| `see_question_paper_questions` | Question paper schema and CO mapping metadata | `sub_id` &rarr; `subjects(id)` |
-| `audit_logs` | Forensic audit log tracking promotion committee overrides | `user_id` &rarr; `users(id)` |
+| `exam_notifications` | Master examination event notifications (`workflow_status`, `exam_type`) | `program_id` &rarr; `programs(id)`, `regulation_id` &rarr; `regulations(id)` |
+| `exam_results` | Student subject scores, grades, credits, fractional grade points | `notification_id` &rarr; `exam_notifications(id)`, Indexes: `idx_er_student_subject`, `idx_er_htno_subcode` |
+| `external_assessment_marks` | Faculty external assessment register, raw/scaled scores & `evidence_basis` | `subject_id` &rarr; `subjects(id)`, `student_id` &rarr; `students(id)`, `source_notification_id`, `source_batch_id` |
+| `attainment_import_batches` | Independent external CSV evidence preview & commit ledger | `subject_id` &rarr; `subjects(id)`, `owner_user_id` &rarr; `users(id)` |
+| `internal_assessments` / `assessment_components` / `assessment_questions` | SEE question paper blueprint (`assessment_number = 'SEE'`) and CO mapping metadata | `sub_id` &rarr; `subjects(id)`, `component_id` &rarr; `assessment_components(id)` |
+| `academic_record_snapshots` & `audit_logs` | Forensic before/after snapshots for result sync replacements and promotion committee overrides | `actor_user_id` / `user_id` &rarr; `users(id)` |

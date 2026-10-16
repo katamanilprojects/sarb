@@ -20,6 +20,9 @@ $selected_sub_id = null;
 $selected_cls_id = null;
 $attendanceData = null;
 $diaryEntries = null;
+$showDateRange = false;
+$start_date = null;
+$end_date = null;
 
 if (!empty($_POST['cls_id'])) {
     $selected_cls_id = $_POST['cls_id'];
@@ -67,10 +70,10 @@ if (!empty($_POST['sub_id']) && !empty($_POST['secretcode']) && !empty($_SESSION
         $details = $hodObj->getClsSubFacBySubID($selected_sub_id);
         switch ($_POST['action']) {
             case 'view_overall':
-                $attendanceData = $facultyObj->getOverallAttendanceBySubject($selected_sub_id, $start_date, $end_date);
+                $attendanceData = $facultyObj->getOverallAttendanceBySubject($selected_sub_id, $start_date, $end_date, true);
                 break;
             case 'view_detailed':
-                $attendanceData = $facultyObj->getDetailedAttendanceBySubject($selected_sub_id, $start_date, $end_date);
+                $attendanceData = $facultyObj->getDetailedAttendanceBySubject($selected_sub_id, $start_date, $end_date, true);
                 break;
             case 'show_diary':
                 $diaryEntries = $facultyObj->getDiaryEntriesBySubject($selected_sub_id, $start_date, $end_date);

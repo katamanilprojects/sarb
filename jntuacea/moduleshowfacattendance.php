@@ -59,9 +59,11 @@ $lesserPct = round($lesserWt * 100);
                     <tbody>
                         <?php
                         foreach ($attendanceData['data'] as $student) {
+                            $isInactive = (isset($student['student_status']) && (int)$student['student_status'] === 0);
+                            $inactiveBadge = $isInactive ? ' <span class="badge bg-secondary ms-1">Inactive</span>' : '';
                             echo "<tr>";
                             echo "<td>" . e($student['username']) . "</td>";
-                            echo "<td>" . e($student['name']) . "</td>";
+                            echo "<td>" . e($student['name']) . $inactiveBadge . "</td>";
                             echo "<td>{$student['percentage']}%</td>";
                             echo "</tr>";
                         }
@@ -76,7 +78,8 @@ $lesserPct = round($lesserWt * 100);
                 // Process attendance data
                 foreach ($attendanceData['data'] as $student) {
                     $percentage = $student['percentage'];
-                    $rollNumber = $student['username']; // Assuming roll number is stored in 'username'
+                    $isInactive = (isset($student['student_status']) && (int)$student['student_status'] === 0);
+                    $rollNumber = $isInactive ? $student['username'] . ' (Inactive)' : $student['username'];
 
                     if ($percentage < $condoneFloor) {
                         $lessThan65[] = $rollNumber;
@@ -152,9 +155,11 @@ $lesserPct = round($lesserWt * 100);
                     <tbody>
                         <?php
                         foreach ($attendanceData['data'] as $student) {
+                            $isInactive = (isset($student['student_status']) && (int)$student['student_status'] === 0);
+                            $inactiveBadge = $isInactive ? ' <span class="badge bg-secondary ms-1">Inactive</span>' : '';
                             echo "<tr>";
                             echo "<td>" . e($student['username']) . "</td>";
-                            echo "<td>" . e($student['name']) . "</td>";
+                            echo "<td>" . e($student['name']) . $inactiveBadge . "</td>";
                             foreach ($dateHours as $dateHour) {
                                 $status = $student['attendance'][$dateHour];
                                 echo "<td>{$status}</td>";
@@ -182,6 +187,11 @@ $lesserPct = round($lesserWt * 100);
                 <br>
                 <form action="download_bluebook.php" method="post">
                     <input type="hidden" name="sub_id" value="<?php echo $selected_sub_id; ?>">
+                    <?php 
+                    $bluebook_fac_id = !empty($selected_fac_id) ? $selected_fac_id : (!empty($fac_id) ? $fac_id : '');
+                    if (!empty($bluebook_fac_id)): ?>
+                        <input type="hidden" name="facid" value="<?php echo htmlspecialchars($bluebook_fac_id); ?>">
+                    <?php endif; ?>
                     <input type="hidden" name="start_date" value="<?php if (!empty($start_date)) {
                                                                         echo $start_date;
                                                                     } ?>">

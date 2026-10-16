@@ -1,20 +1,21 @@
 # Student Biographical Dossier, Document Vault, Custody Ledger & Statutory Certificates Workflow
 
-This document details the lifecycle for student biographical profiling, cloud document vault storage, physical original certificates custody governance, and self-service statutory certificate issuance.
+This document details the lifecycle for student biographical profiling, private document vault storage (`COLLEGE_DOCUMENT_ROOT` via `\College\DocumentStorage`), physical original certificates custody governance, atomic certificate numbering (`certificate_sequences`), and opaque CSPRNG token verification (`viewcertificate.php`).
 
 ---
 
 ## 1. Overview & Policy Rationale
 
 Autonomous engineering colleges and university constituent colleges are legally accountable for maintaining statutory student identity records and safely managing original student certificates submitted at the time of admission:
-1. **Biographical Dossier**: Centralizes personal, parental, demographic, category/quota, and contact records.
-2. **Cloud Document Vault**: Provides students a secure digital vault to upload PDF/JPG scans of prerequisite certificates (Aadhaar, SSC, Intermediate/Diploma, Entrance Rank Cards, Caste, Income).
-3. **Physical Custody Ledger**: Under autonomous university rules, original certificates are retained in college custody until degree completion. When students require original certificates temporarily (e.g., for Passport verification, Visa interviews, or Education Loans), a formal audited custody ledger tracks checkout, due date, return, or permanent clearance.
-4. **Statutory Certificate Generation**: Automates the request, administrative review, and generation of official institutional certificates:
-   - **Bonafide / Study Certificate**
-   - **Conduct Certificate**
-   - **Custodial Certificate** (formally certifying all original certificates held in institutional custody)
-   - **Transfer Certificate (TC)**
+1. **Biographical Dossier**: Centralizes personal, parental, demographic, category/quota, and contact records (`student_profiles`).
+2. **Private Cloud Document Vault**: Provides students a secure digital vault (`studentdocuments.php`) to upload PDF/PNG/JPG scans of prerequisite certificates (Aadhaar, SSC, Intermediate/Diploma, Entrance Rank Cards, Caste, Income) stored outside the web root (`COLLEGE_DOCUMENT_ROOT`) and streamed only through authenticated ownership checks (`viewdocument.php`).
+3. **Physical Custody Ledger**: Under autonomous university rules, original certificates are retained in college custody until degree completion (`student_custodial_records`). When students require original certificates temporarily (e.g., for Passport verification, Visa interviews, or Education Loans), a formal audited custody ledger tracks checkout, expected return date, return, or permanent clearance.
+4. **Statutory Certificate Generation & Opaque Verification**: Automates the request, administrative review, atomic numbering (`\College\CertificateNumber`), and issuance of official institutional certificates (`student_certificate_requests`):
+   - **Bonafide Certificate** (`BONAFIDE`)
+   - **Study & Conduct Certificate** (`STUDY_CONDUCT`)
+   - **Custodial Certificate** (`CUSTODIAL` — formally certifying all original certificates held in institutional custody)
+   - **Transfer Certificate (TC)** (`TRANSFER_CERTIFICATE`)
+   - **No Dues Clearance Certificate** (`NO_DUES`)
 
 ---
 
@@ -24,56 +25,56 @@ Autonomous engineering colleges and university constituent colleges are legally 
 sequenceDiagram
     autonumber
     actor Student
-    participant StuProfUI as studentprofile.php
+    participant StuProfUI as studentprofile.php / studentdocuments.php
     participant StuCertUI as studentcertificates.php
-    participant Service as StudentProfileService.php
-    participant DB as MariaDB (student_*, users)
+    participant Service as services/StudentProfileService.php
+    participant Core as College\DocumentStorage & College\CertificateNumber
+    participant DB as MariaDB (student_*, certificate_sequences, users)
     actor AdminStaff as Academic Section / Admin
     participant AdminProfUI as adminstudentprofiles.php
     participant CustodyUI as admincustodyledger.php
-    participant PrintUI as student_print_certificate.php
+    participant ViewUI as viewcertificate.php / viewdocument.php
 
-    Note over Student,StuProfUI: Phase 1: Biographical Dossier & Vault Upload
+    Note over Student,StuProfUI: Phase 1: Biographical Dossier & Private Vault Upload
     Student->>StuProfUI: Fill personal details, parents, Aadhaar, blood group, address
-    StuProfUI->>Service: saveProfile(student_id, data)
-    Service->>DB: INSERT/UPDATE student_profiles
-    Student->>StuProfUI: Upload digital certificate scans (PDF/JPG)
-    StuProfUI->>Service: uploadDocument(student_id, doc_type, file)
-    Service->>DB: INSERT INTO student_documents (verification_status = 'PENDING')
+    StuProfUI->>Service: saveProfile(roll_no, data, user_id)
+    Service->>DB: Atomic UPSERT student_profiles & UPDATE users (mobile, email)
+    Student->>StuProfUI: Upload digital certificate scans (PDF/PNG/JPG)
+    StuProfUI->>Service: uploadDocument(roll_no, doc_type, file, user_id)
+    Service->>Core: DocumentStorage::store(roll_no, tmp_file, ext)
+    Core-->>Service: Return private://student_docs/<roll_no>/<random_name>
+    Service->>DB: INSERT INTO student_documents (is_verified = 0)
 
-    Note over AdminStaff,AdminProfUI: Phase 2: Administrative Verification & Custody Intake
-    AdminStaff->>AdminProfUI: Review student profile & inspect uploaded scans
-    AdminStaff->>Service: verifyDocument(doc_id, status, remarks)
-    Service->>DB: UPDATE student_documents SET verification_status = 'VERIFIED'
+    Note over AdminStaff,CustodyUI: Phase 2: Administrative Verification & Custody Intake
+    AdminStaff->>AdminProfUI: Stream & inspect uploaded scans via viewdocument.php
+    AdminStaff->>Service: verifyDocument(doc_id, status, remarks, user_id)
+    Service->>DB: UPDATE student_documents SET is_verified = 1, verified_by = ?
     AdminStaff->>CustodyUI: Physical Intake of original certificates (e.g. 10th Marks Card)
-    CustodyUI->>Service: addCustodialRecord(student_id, doc_name, cert_number, barcode)
+    CustodyUI->>Service: addCustodialRecord(data, user_id)
     Service->>DB: INSERT INTO student_custodial_records (status = 'IN_CUSTODY')
 
     Note over AdminStaff,CustodyUI: Phase 3: Temporary Certificate Checkout & Return
     Student->>AdminStaff: Request original certificate for Passport Verification
-    AdminStaff->>CustodyUI: Temporarily return certificate (specify return_due_date, purpose)
-    CustodyUI->>Service: temporarilyReturnCertificate(record_id, due_date, purpose)
+    AdminStaff->>CustodyUI: Temporarily return certificate (expected_return_date, purpose)
+    CustodyUI->>Service: updateCustodialStatus(record_id, 'TEMPORARILY_RETURNED', ...)
     Service->>DB: UPDATE student_custodial_records SET status = 'TEMPORARILY_RETURNED'
-    Student->>AdminStaff: Return original certificate after verification
-    AdminStaff->>CustodyUI: Mark returned to college custody
-    CustodyUI->>Service: markCertificateReturned(record_id)
-    Service->>DB: UPDATE student_custodial_records SET status = 'IN_CUSTODY'
 
     Note over Student,StuCertUI: Phase 4: Statutory Certificate Application
     Student->>StuCertUI: Apply for Certificate (e.g., Custodial or Bonafide Certificate)
-    StuCertUI->>Service: requestCertificate(student_id, cert_type, purpose)
-    Service->>DB: INSERT INTO student_certificate_requests (status = 'SUBMITTED')
+    StuCertUI->>Service: requestCertificate(roll_no, cert_type, purpose, copies)
+    Service->>DB: INSERT INTO student_certificate_requests (status = 'REQUESTED')
 
-    Note over AdminStaff,AdminProfUI: Phase 5: Approval & Tamper-Evident Issuance
-    AdminStaff->>AdminProfUI: Review Certificate Request
-    AdminStaff->>Service: updateCertificateStatus(req_id, 'APPROVED', cert_number, approver_id)
-    Service->>DB: UPDATE student_certificate_requests SET status = 'APPROVED', cert_number = ?, issued_at = NOW()
+    Note over AdminStaff,AdminProfUI: Phase 5: Approval, Atomic Numbering & Opaque Token Issuance
+    AdminStaff->>CustodyUI: Review Certificate Request
+    CustodyUI->>Service: updateCertificateStatus(req_id, 'APPROVED', remarks, approver_id)
+    Service->>Core: CertificateNumber::next(conn, prefix)
+    Core->>DB: SELECT/UPDATE certificate_sequences FOR UPDATE
+    Service->>DB: UPDATE student_certificate_requests SET status='APPROVED', certificate_no=?, verification_token=bin2hex(random_bytes(32))
 
-    Note over Student,PrintUI: Phase 6: Student View & High-Fidelity Print
-    Student->>PrintUI: Open approved certificate
-    PrintUI->>Service: getCertificateRenderData(req_id)
-    Service->>DB: Query profile, custody records, and issuance details
-    PrintUI-->>Student: Render official printable certificate with Watermark, Security Hash & Signatures
+    Note over Student,ViewUI: Phase 6: Authenticated View & Public Token Verification
+    Student->>ViewUI: Open viewcertificate.php?id=<req_id> (RecordScope checked) or public ?id=<req_id>&token=<token>
+    ViewUI->>Service: getCertificateById(req_id) / verifyCertificateByToken(req_id, token)
+    ViewUI-->>Student: Render printable certificate or limited public credential verification banner
 ```
 
 ---
@@ -81,62 +82,54 @@ sequenceDiagram
 ## 3. Step-by-Step Implementation
 
 ### Step 1: Biographical Dossier (`studentprofile.php`)
-- **Demographics**: Father's name, Mother's name, Date of Birth, Gender, Blood Group, Aadhaar Number, Category/Quota (OC, BC-A, BC-B, SC, ST, EWS, Management, NRI), Religion, Nationality.
-- **Academic Coordinates**: Admission Date, Hall Ticket / Roll Number, Permanent Address, Current Address, Emergency Contact.
-- **Verification Workflow**: Academic Section officers can mark profiles as `VERIFIED` with formal administrative notes.
+- **Demographics**: Father's name, Mother's name, Date of Birth, Gender, Blood Group, Aadhaar Number, Category/Quota (`CONVENOR`, `ECET`, `SPOT`, `NRI`, `GATE`), Entrance Rank, Admission Hall Ticket.
+- **Contact & Coordinates**: Admission Date, Roll Number (`roll_no`), Permanent Address, Current Address, Mobile, Email, Emergency Parental Contact.
+- **Transactional Integrity**: `StudentProfileService::saveProfile()` updates both `student_profiles` and `users` inside an atomic database transaction with `audit_logs` tracking.
 
-### Step 2: Cloud Document Vault
-- Supported document types:
-  - `AADHAAR`: National Identity Card scan.
-  - `SSC_MARKS`: Class 10 / Secondary School Certificate.
-  - `INTER_MARKS`: Class 12 / Intermediate / Diploma Certificate.
-  - `ENTRANCE_RANK_CARD`: EAMCET / ECET / ICET Rank Card.
-  - `CASTE_CERT`: Community / Category Certificate.
-  - `INCOME_CERT`: Statutory Income Certificate for fee reimbursement.
-- File security: Stored under sanitized file hashes in `uploads/student_docs/` with file mime validation and direct PHP execution blocking.
+### Step 2: Private Cloud Document Vault (`studentdocuments.php` & `viewdocument.php`)
+- Supported document types (`doc_type`): `SSC_MEMO`, `INTER_DIPLOMA_MEMO`, `ALLOTMENT_ORDER`, `CASTE_CERTIFICATE`, `INCOME_CERTIFICATE`, `AADHAR_CARD`, `STUDY_CERTIFICATES`, `TRANSFER_CERTIFICATE`, `OTHER`.
+- **Private Repository (`\College\DocumentStorage`)**:
+  - New uploads require `COLLEGE_DOCUMENT_ROOT` to be configured in `.env.php` pointing to a persistent directory outside the web document root, storing files under `private://student_docs/<roll_no>/<random_hash>.<ext>`.
+  - Direct web access to `uploads/student_docs/` is blocked by `.htaccess`. All document downloads stream through `viewdocument.php`, which verifies `RecordScope::document()` ownership before reading the file.
+- **Soft-Delete Retention**: Deleting a document via `StudentProfileService::deleteDocument()` records `deleted_at = NOW()` and `deleted_by = <user_id>` rather than unlinking the physical file, preserving forensic audit evidence.
 
 ### Step 3: Physical Custody Ledger (`admincustodyledger.php`)
-- Records physical documents surrendered upon admission:
-  - Document name & serial/certificate number.
-  - Custody barcode/rack/box locator for physical archives.
+- Records physical documents surrendered upon admission (`student_custodial_records`):
+  - Document name & serial/certificate number (`certificate_serial_no`).
   - Lifecycle state machine:
     - `IN_CUSTODY`: Secured in college records room.
-    - `TEMPORARILY_RETURNED`: Checked out with strict `return_due_date` and purpose log.
-    - `PERMANENTLY_RETURNED`: Released permanently upon graduation or formal TC issuance.
+    - `TEMPORARILY_RETURNED`: Checked out with `issued_date`, `expected_return_date`, and `purpose_of_withdrawal`.
+    - `PERMANENTLY_RETURNED`: Released permanently upon graduation or formal exit.
 
-### Step 4: Statutory Certificate Engine (`StudentProfileService`) & Cryptographic QR Verification (`MOD_CERTIFICATE_QR`)
-- Supported certificate categories:
-  1. **Bonafide / Study Certificate**: Certifies current enrollment, academic year, regulation, and course duration.
-  2. **Conduct Certificate**: Attests to moral character, discipline, and campus conduct.
-  3. **Custodial Certificate**: Formally enumerates every original document held in university custody, allowing students to present proof of custody to embassies, passport authorities, and financial institutions without withdrawing their physical originals.
-  4. **Transfer Certificate (TC)**: Formal institutional departure certificate.
-- **Tamper-Evident Security & Cryptographic QR Verification (`viewcertificate.php`)**:
-  - Unique Institutional Certificate Number (e.g., `JNTUACEA/CUST/2026/0042`).
-  - Cryptographic Verification Token derived from SHA-256 hash:
-    $$\text{Token} = \text{hash}\Big(\text{"sha256"}, \text{certificate\_no} \mathbin{\Vert} \text{roll\_no}\Big)$$
-  - Scannable dynamic QR Code printed directly on certificates and custodial receipts pointing to `viewcertificate.php?cert_no=<NO>&token=<HASH>`.
-  - Public verification engine validates authenticity via `StudentProfileService::verifyCertificateByToken()` and displays official verified banner with student name, roll number, issue date, and authority details.
-  - Background university seal watermark and formal signature blocks.
+### Step 4: Statutory Certificate Engine (`StudentProfileService`) & Opaque Token Verification (`MOD_CERTIFICATE_QR`)
+- Supported certificate categories (`student_certificate_requests.cert_type`): `BONAFIDE`, `STUDY_CONDUCT`, `CUSTODIAL`, `TRANSFER_CERTIFICATE`, `NO_DUES`.
+- **Concurrency-Safe Certificate Numbering (`\College\CertificateNumber`)**:
+  - Uses `certificate_sequences` (`prefix`, `last_number`) with row-level `FOR UPDATE` locking to allocate unique sequential numbers (e.g., `JNTUACEA/BON/2026/0001`), preventing duplicate certificate numbers under concurrent requests.
+- **Opaque CSPRNG Token Verification (`viewcertificate.php`)**:
+  - Upon approval/generation, `StudentProfileService` generates an unpredictable 64-character hexadecimal token (`bin2hex(random_bytes(32))`) stored in `student_certificate_requests.verification_token` (`uq_certificate_verification_token`).
+  - No external QR image service is contacted, preventing third-party leakage of certificate URLs.
+  - Public verification via `viewcertificate.php?id=<REQ_ID>&token=<TOKEN>` validates the opaque token via `hash_equals` and returns limited verification metadata (masking the roll number on unauthenticated public lookup while requiring authenticated `RecordScope::certificate()` ownership for full printable certificate rendering).
 
 ---
 
 ## 4. Student Attendance Risk Gauge (`MOD_STUDENT_ATTENDANCE_RISK`)
 
-Integrated directly into `jntuaceastudents/studenthome.php` powered by `StudentAttendanceService::getStudentAttendanceRiskMetrics()`:
-- **Aggregate Attendance Standings**: Real-time display of total conducted periods ($T$), attended periods ($P$), and overall aggregate percentage ($A = \frac{P}{T} \times 100$).
+Integrated directly into `jntuaceastudents/studenthome.php` powered by `StudentAttendanceService::getStudentAttendanceRiskMetrics()` and `\College\AttendanceService`:
+- **Aggregate Attendance Standings**: Real-time display of total conducted periods ($T$), attended periods ($P$), and overall aggregate percentage ($A = \frac{P}{T} \times 100$) from the student's `date_of_joining` across mapped subjects.
 - **Safe Margin Metric**: When $A \ge 75.0\%$, calculates how many upcoming lecture periods the student can afford to miss without breaching the $75\%$ regulatory floor:
   $$\text{Safe Margin} = \max\left(0, \left\lfloor \frac{P - 0.75 \times T}{0.75} \right\rfloor\right)$$
 - **Recovery Periods Needed**: When $A < 75.0\%$, calculates consecutive future class periods the student must attend without absence to restore attendance back to $\ge 75.0\%$:
   $$\text{Recovery Periods} = \max\left(0, \left\lceil \frac{0.75 \times T - P}{0.25} \right\rceil\right)$$
-- **Regulatory Standing Badges**: Renders Green Badge ($\ge 75\%$, Safe Zone), Warning Yellow Badge ($65.0\% \le A < 75.0\%$, Condonation Bracket), or Red Alert Badge ($< 65.0\%$, Detention Risk).
+- **Regulatory Standing Badges**: Renders status badges for `ELIGIBLE` ($\ge 75\%$), `CONDONATION` ($65.0\% \le A < 75.0\%$), `DETAINED` ($< 65.0\%$ or single course below floor), `PROVISIONAL` (when unrecorded periods exist), or `POLICY_REVIEW`.
 
 ---
 
 ## 5. Database Schema Reference
 
-| Table Name | Description | Key Foreign Keys |
+| Table Name | Description | Key Foreign Keys & Unique Constraints |
 | :--- | :--- | :--- |
-| `student_profiles` | Demographic & biographical student records | `student_id` &rarr; `students(id)` |
-| `student_documents` | Cloud digital document scans & verification statuses | `student_id` &rarr; `students(id)`, `verified_by` &rarr; `users(id)` |
-| `student_custodial_records` | Physical original certificate custody tracking | `student_id` &rarr; `students(id)`, `received_by` &rarr; `users(id)` |
-| `student_certificate_requests` | Self-service certificate applications & approvals | `student_id` &rarr; `students(id)`, `processed_by` &rarr; `users(id)` |
+| `student_profiles` | Demographic & biographical student records | `roll_no` &rarr; `users(username)` (`fk_sp_user`) |
+| `student_documents` | Private digital document vault metadata & soft-delete state (`deleted_at`, `deleted_by`) | `roll_no` &rarr; `users(username)` (`fk_sd_user`) |
+| `student_custodial_records` | Physical original certificate custody tracking | `roll_no` &rarr; `users(username)` (`fk_scr_user`) |
+| `student_certificate_requests` | Self-service certificate applications, approvals & opaque `verification_token` | `roll_no` &rarr; `users(username)` (`fk_sc_req_user`), Unique: `certificate_no`, `verification_token` |
+| `certificate_sequences` | Atomic per-prefix sequence counter (`prefix`, `last_number`) | Primary Key: `prefix` |

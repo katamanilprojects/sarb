@@ -402,23 +402,31 @@ class Faculty extends User
 
 
 	// Function to get overall attendance by subject
-	public function getOverallAttendanceBySubject($sub_id, $start_date = null, $end_date = null)
+	public function getOverallAttendanceBySubject($sub_id, $start_date = null, $end_date = null, $includeInactive = false)
 	{
 		$res = ['status' => 0, 'data' => []];
 		try {
+            $this->assertSubjectScope((int)$sub_id);
+            require_once __DIR__ . '/core/DateRange.php';
+            $start_date = $start_date === '' ? null : $start_date;
+            $end_date = $end_date === '' ? null : $end_date;
+            \College\DateRange::validate($start_date, $end_date);
 			$dateFilter = "";
 			if ($start_date && $end_date) {
-				$dateFilter = "AND a.date BETWEEN '$start_date' AND '$end_date'";
+				$dateFilter = "AND a.date BETWEEN ? AND ?";
 			}
 
-			if ($stmt = $this->conn->prepare("SELECT u.name, s.username, COUNT(CASE WHEN a.status = 'P' THEN 1 END) / COUNT(*) * 100 AS percentage FROM student_sub ss JOIN students s ON ss.stu_id = s.id JOIN users u ON s.username = u.username RIGHT JOIN attendance a ON ss.stu_id = a.stu_id AND a.sub_id = ? WHERE ss.sub_id = ? AND s.status = 1 AND (a.date >= COALESCE(s.date_of_joining, (SELECT j.doj FROM temp_joiningdates j WHERE j.htno = s.username), '1900-01-01')) " . $dateFilter . " GROUP BY s.id order by s.username")) {
-				$stmt->bind_param("ii", $sub_id, $sub_id);
+			$statusClause = $includeInactive ? "" : "AND s.status = 1";
+			if ($stmt = $this->conn->prepare("SELECT u.name, s.username, COUNT(CASE WHEN a.status = 'P' THEN 1 END) / COUNT(*) * 100 AS percentage, s.status as student_status FROM student_sub ss JOIN students s ON ss.stu_id = s.id JOIN users u ON s.username = u.username RIGHT JOIN attendance a ON ss.stu_id = a.stu_id AND a.sub_id = ? WHERE ss.sub_id = ? " . $statusClause . " AND (a.date >= COALESCE(s.date_of_joining, (SELECT j.doj FROM temp_joiningdates j WHERE j.htno = s.username), '1900-01-01')) " . $dateFilter . " GROUP BY s.id order by s.username")) {
+				if ($start_date !== null) { $stmt->bind_param("iiss", $sub_id, $sub_id, $start_date, $end_date); }
+                else { $stmt->bind_param("ii", $sub_id, $sub_id); }
 				if ($stmt->execute()) {
-					$stmt->bind_result($name, $username, $percentage);
+					$stmt->bind_result($name, $username, $percentage, $studentStatus);
 					while ($stmt->fetch()) {
 						$res['data'][] = [
 							'name' => $name,
 							'username' => $username,
+							'student_status' => (int)$studentStatus,
 							'percentage' => round($percentage, 2) // Round percentage to 2 decimal places
 						];
 					}
@@ -430,25 +438,32 @@ class Faculty extends User
 				$this->logs->errLog("Not prepared: " . $this->conn->error);
 			}
 		} catch (Exception $e) {
+            $res['err'] = $e->getMessage();
 			$this->logs->errLog("Exception: " . $e->getMessage());
 		}
 		return $res;
 	}
 
 	// Function to get detailed attendance by subject
-	public function getDetailedAttendanceBySubject($sub_id, $start_date = null, $end_date = null)
+	public function getDetailedAttendanceBySubject($sub_id, $start_date = null, $end_date = null, $includeInactive = false)
 	{
 		$res = ['status' => 0, 'data' => []];
 		try {
+            $this->assertSubjectScope((int)$sub_id);
+            require_once __DIR__ . '/core/DateRange.php';
+            $start_date = $start_date === '' ? null : $start_date;
+            $end_date = $end_date === '' ? null : $end_date;
+            \College\DateRange::validate($start_date, $end_date);
 			// Fetch distinct date-hour combinations for the subject
 			$dateHours = [];
 			$dateFilter = "";
 			if ($start_date && $end_date) {
-				$dateFilter = "AND a.date BETWEEN '$start_date' AND '$end_date'";
+				$dateFilter = "AND a.date BETWEEN ? AND ?";
 			}
 			$hours = array();
 			if ($stmt = $this->conn->prepare("SELECT DISTINCT date, ct.id, ct.hour FROM attendance a LEFT JOIN class_timings ct ON a.hour=ct.id WHERE sub_id = ? " . $dateFilter . " ORDER BY date, ct.id")) {
-				$stmt->bind_param("i", $sub_id);
+				if ($start_date !== null) { $stmt->bind_param("iss", $sub_id, $start_date, $end_date); }
+                else { $stmt->bind_param("i", $sub_id); }
 
 				if ($stmt->execute()) {
 					$stmt->bind_result($date, $hour_id, $hour);
@@ -463,10 +478,12 @@ class Faculty extends User
 			}
 
 			// Fetch attendance data for each student and date-hour combination
-			if ($stmt = $this->conn->prepare("SELECT u.name, s.username, a.date, a.hour, a.status FROM student_sub ss JOIN students s ON ss.stu_id = s.id JOIN users u ON s.username = u.username RIGHT JOIN attendance a ON ss.stu_id = a.stu_id AND a.sub_id = ? WHERE ss.sub_id = ? AND s.status = 1 AND (a.date >= COALESCE(s.date_of_joining, (SELECT j.doj FROM temp_joiningdates j WHERE j.htno = s.username), '1900-01-01')) " . $dateFilter . " order by s.username")) {
-				$stmt->bind_param("ii", $sub_id, $sub_id);
+			$statusClause = $includeInactive ? "" : "AND s.status = 1";
+			if ($stmt = $this->conn->prepare("SELECT u.name, s.username, a.date, a.hour, a.status, s.status as student_status FROM student_sub ss JOIN students s ON ss.stu_id = s.id JOIN users u ON s.username = u.username RIGHT JOIN attendance a ON ss.stu_id = a.stu_id AND a.sub_id = ? WHERE ss.sub_id = ? " . $statusClause . " AND (a.date >= COALESCE(s.date_of_joining, (SELECT j.doj FROM temp_joiningdates j WHERE j.htno = s.username), '1900-01-01')) " . $dateFilter . " order by s.username")) {
+				if ($start_date !== null) { $stmt->bind_param("iiss", $sub_id, $sub_id, $start_date, $end_date); }
+                else { $stmt->bind_param("ii", $sub_id, $sub_id); }
 				if ($stmt->execute()) {
-					$stmt->bind_result($name, $username, $date, $hour, $status);
+					$stmt->bind_result($name, $username, $date, $hour, $status, $studentStatus);
 
 					// Organize attendance data by student
 					$students = [];
@@ -481,6 +498,7 @@ class Faculty extends User
 							$students[$username] = [
 								'name' => $name,
 								'username' => $username,
+								'student_status' => (int)$studentStatus,
 								'attendance' => array_fill_keys($dateHours, '-'), // Initialize with '-'
 								'total_present' => 0,
 								'total_classes' => 0
@@ -507,6 +525,7 @@ class Faculty extends User
 				$this->logs->errLog("Not prepared: " . $this->conn->error);
 			}
 		} catch (Exception $e) {
+            $res['err'] = $e->getMessage();
 			$this->logs->errLog("Exception: " . $e->getMessage());
 		}
 		return $res;
@@ -1132,6 +1151,14 @@ class Faculty extends User
 		$myname = $this->classname . " - addCIAAttachment - ";
 
 		try {
+            $this->assertSubjectScope((int)$subjectId);
+            $this->conn->begin_transaction();
+            $lock = $this->conn->prepare('SELECT id FROM subjects WHERE id=? FOR UPDATE');
+            $lock->bind_param('i', $subjectId); $lock->execute(); $lock->store_result();
+            $count = $this->conn->prepare('SELECT COUNT(*) FROM cia_attachments WHERE subject_id=? AND assessment_number=?');
+            $count->bind_param('ii', $subjectId, $assessmentNumber); $count->execute();
+            if ((int)$count->get_result()->fetch_row()[0] >= 5) { throw new DomainException('This assessment already has five attachments.'); }
+
 			$stmt = $this->conn->prepare("INSERT INTO `cia_attachments`(`subject_id`, `assessment_number`, `file_title`, `file_path`) VALUES (?, ?, ?, ?)");
 			if (!$stmt) {
 				throw new Exception("Failed to prepare insert cia_attachments statement: " . $this->conn->error);
@@ -1140,12 +1167,14 @@ class Faculty extends User
 			$stmt->bind_param("iiss", $subjectId, $assessmentNumber, $fileTitle, $filePath);
 			if ($stmt->execute()) {
 				$res['status'] = 1; // Marks added successfully
-				$this->dbActivityLog($_SESSION['userid'] ?? 0, "UPLOAD_CIA_ATTACHMENT", "Uploaded CIA Attachment: $fileTitle for Subject ID: $subjectId, Mid: $assessmentNumber", "faculty", "CIA_ATTACHMENT", (string)$subjectId);
+				if (!$this->dbActivityLog($_SESSION['userid'] ?? 0, "UPLOAD_CIA_ATTACHMENT", "Uploaded CIA Attachment: $fileTitle for Subject ID: $subjectId, Mid: $assessmentNumber", "faculty", "CIA_ATTACHMENT", (string)$subjectId)) { throw new RuntimeException('Unable to save attachment audit.'); }
+                $this->conn->commit();
 			} else {
 				$this->logs->errLog($myname . "Statement not executed: " . $this->conn->error);
 			}
 			$stmt->close();
 		} catch (Exception $e) {
+            $this->conn->rollback(); $res['status'] = 0;
 			$this->logs->errLog($myname . "Exception: " . $e->getMessage());
 		}
 		return $res;
@@ -1158,6 +1187,7 @@ class Faculty extends User
 		$myname = $this->classname . " - getCIAAttachments - ";
 
 		try {
+            $this->assertSubjectScope((int)$subjectId);
 			$stmt = $this->conn->prepare("SELECT `id`, `file_title`, `file_path` FROM `cia_attachments` WHERE `subject_id` = ? AND `assessment_number` = ?");
 			if (!$stmt) {
 				throw new Exception("Failed to prepare get internal assessment marks query: " . $this->conn->error);
@@ -1191,6 +1221,7 @@ class Faculty extends User
 		$myname = $this->classname . " - getCIAAttachmentsBySubId - ";
 
 		try {
+            $this->assertSubjectScope((int)$subjectId);
 			$stmt = $this->conn->prepare("SELECT `id`, `assessment_number`, `file_title`, `file_path` FROM `cia_attachments` WHERE `subject_id` = ? ORDER BY `assessment_number`");
 			if (!$stmt) {
 				throw new Exception("Failed to prepare get internal assessment marks query: " . $this->conn->error);
@@ -1225,6 +1256,7 @@ class Faculty extends User
 		$myname = $this->classname . " - deleteCIAAttachment - ";
 
 		try {
+            $this->assertSubjectScope((int)$subjectId);
 			$stmt = $this->conn->prepare("DELETE FROM `cia_attachments` WHERE `id`=? and `subject_id`=? and `assessment_number`=?");
 			if (!$stmt) {
 				throw new Exception("Failed to prepare insert cia_attachments statement: " . $this->conn->error);

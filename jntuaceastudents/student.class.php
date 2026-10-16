@@ -106,8 +106,12 @@ class Student extends User {
         return $this->getRepository()->verifyStudentOwnership($student_id, $username);
     }
 
-    public function verifyClassEnrollment($student_id, $class_id) {
-        return $this->getRepository()->verifyClassEnrollment($student_id, $class_id);
+    public function verifyClassEnrollment($student_id, $class_id, $requireActive = true) {
+        return $this->getRepository()->verifyClassEnrollment($student_id, $class_id, $requireActive);
+    }
+
+    public function getStudentClassStatus($student_id, $class_id) {
+        return $this->getRepository()->getStudentClassStatus($student_id, $class_id);
     }
 
     public function verifySubjectEnrollment($student_id, $subject_id) {

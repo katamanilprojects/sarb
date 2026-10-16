@@ -18,7 +18,7 @@ class StudentRepository extends BaseService {
      */
     public function getEnrolledClassesByUsername($username) {
         $query = "
-            SELECT s.id AS student_id, s.class_id, c.classname, c.acad_year, c.start_date, c.end_date 
+            SELECT s.id AS student_id, s.class_id, s.status AS student_status, c.classname, c.acad_year, c.start_date, c.end_date 
             FROM students s 
             JOIN classes c ON s.class_id = c.id 
             WHERE s.username = ? order by start_date desc
@@ -59,20 +59,45 @@ class StudentRepository extends BaseService {
     }
 
     /**
-     * Verify student is actively enrolled in the specified class
+     * Verify student is enrolled in the specified class
      *
      * @param int $student_id
      * @param int $class_id
+     * @param bool $requireActive When false, allows inactive enrollment for read-only past attendance review
      * @return bool
      */
-    public function verifyClassEnrollment($student_id, $class_id) {
-        $stmt = $this->conn->prepare("SELECT id FROM students WHERE id = ? AND class_id = ? AND status = 1");
+    public function verifyClassEnrollment($student_id, $class_id, $requireActive = true) {
+        $sql = "SELECT id FROM students WHERE id = ? AND class_id = ?";
+        if ($requireActive) {
+            $sql .= " AND status = 1";
+        }
+        $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("ii", $student_id, $class_id);
         $stmt->execute();
         $stmt->store_result();
         $isValid = $stmt->num_rows > 0;
         $stmt->close();
         return $isValid;
+    }
+
+    /**
+     * Get student's status in a specific class (1 = Active, 0 = Inactive, null = not found)
+     *
+     * @param int $student_id
+     * @param int $class_id
+     * @return int|null
+     */
+    public function getStudentClassStatus($student_id, $class_id) {
+        $stmt = $this->conn->prepare("SELECT status FROM students WHERE id = ? AND class_id = ?");
+        $stmt->bind_param("ii", $student_id, $class_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($row = $res->fetch_assoc()) {
+            $stmt->close();
+            return (int)$row['status'];
+        }
+        $stmt->close();
+        return null;
     }
 
     /**

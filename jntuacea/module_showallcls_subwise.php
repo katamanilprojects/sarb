@@ -62,9 +62,12 @@ $subjectBuckets = attendance_rule_buckets($subjectRules);
                     <?php foreach ($studentList as $student) {
                         $rollNumber = $student['roll_number'];
                         $studentName = $student['name'];
+                        $isInactive = (isset($student['status']) && (int)$student['status'] === 0);
+                        $inactiveBadge = $isInactive ? ' <span class="badge bg-secondary ms-1">Inactive</span>' : '';
+                        $rollBucketLabel = $isInactive ? $rollNumber . ' (Inactive)' : $rollNumber;
                         echo '<tr>';
                         echo '<td>' . e($rollNumber) . '</td>';
-                        echo '<td>' . e($studentName) . '</td>';
+                        echo '<td>' . e($studentName) . $inactiveBadge . '</td>';
 
                         foreach ($sub_sno_array as $sno) {
                             if (isset($attendanceData[$rollNumber][$sno]['percentage'])) {
@@ -75,7 +78,7 @@ $subjectBuckets = attendance_rule_buckets($subjectRules);
                                         if (!isset($subjectBuckets[$rule['id']]['subjects'][$sno])) {
                                             $subjectBuckets[$rule['id']]['subjects'][$sno] = [];
                                         }
-                                        $subjectBuckets[$rule['id']]['subjects'][$sno][] = $rollNumber;
+                                        $subjectBuckets[$rule['id']]['subjects'][$sno][] = $rollBucketLabel;
                                     }
                                 }
                             } else {

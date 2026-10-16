@@ -32,10 +32,10 @@ The isolated test databases contain deliberate test fixtures. They are not autho
 - `database/migrations/20261008_001_trusted_core.sql` adds permission, review, snapshot, policy-version, sequence and inactive AI infrastructure; extends results/CQI/course-review metadata and rubric uniqueness.
 - `database/migrations/20261008_002_document_lifecycle.sql` adds retained document-deletion metadata and opaque certificate verification tokens.
 - `schema_migrations` records applied version/checksum. MariaDB DDL implicitly commits; statements are replay-safe so an interrupted migration can be resumed after diagnosis. There is no blanket down-migration that deletes evidence tables.
-- `tools/sync_core.php` distributes the staff portal's twelve common PHP core files to the student portal. Both copies carry release metadata. Modify the staff source, then synchronise and check parity.
+- `tools/sync_core.php` distributes the staff portal's common PHP core files (12 in 2026.10.08.1, expanded to 17 in 2026.10.08.2) to the student portal. Both copies carry release metadata. Modify the staff source, then synchronise and check parity.
 - The source manifest is `/private/tmp/cea-standardisation-release-20261008.json`. It includes both portals' source, migration scripts and relevant protection/release files while excluding credentials, uploaded content, logs, vendor code and Git metadata.
 
-Use the bundled PHP executable at `/Applications/XAMPP/xamppfiles/bin/php`. From the staff portal directory:
+Use the system or MAMP PHP CLI executable (`php`). From the repository root directory (`/Applications/MAMP/htdocs/classattendance.in`):
 
 ```text
 php tools/migrate.php

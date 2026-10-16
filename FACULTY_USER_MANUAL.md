@@ -58,7 +58,7 @@ To provide cohesive continuity across all features, this manual follows a single
 |:---:|:---|:---:|:---|
 | **Part I** | **System Fundamentals & Daily Scheduling** | | |
 | 1 | Feature 1: Portal Authentication, Home Dashboard & Weekly Timetable | System Core | `index.php`, `fachome.php` |
-| 2 | Feature 2: Knowledge Base & OBE Terminology Primer | `MOD_OBE` | `facknowledgebase.php` |
+| 2 | Feature 2: Knowledge Base & OBE Terminology Primer | System Core | `facknowledgebase.php` |
 | **Part II** | **Curriculum Design & Pedagogical Planning** | | |
 | 3 | Feature 3: Course Outcomes (COs) Definition & Bloom's Tagging | `MOD_CO_PO` | `facaddcos.php` |
 | 4 | Feature 4: CO-PO & CO-PSO Articulation Matrix Configuration | `MOD_CO_PO` | `facarticulationmatrix.php` |
@@ -74,19 +74,19 @@ To provide cohesive continuity across all features, this manual follows a single
 | 12 | Feature 12: Grouped Cohorts Attendance for Multi-Section Courses | `MOD_GROUPED_ATT` | `facaddgroupedattendance.php` |
 | 13 | Feature 13: Grouped Assessment Data & Attachments Import | `MOD_GROUPED_ATT` | `facgroupedcia.php` |
 | **Part V** | **Continuous Internal Assessments (CIA) & Attachments** | | |
-| 14 | Feature 14: CIA Question Blueprint, Bloom Levels & CO Tagging | `MOD_CIA_MARKS` | `facciacomp.php`, `facquestionco.php` |
+| 14 | Feature 14: CIA Question Blueprint, Bloom Levels & CO Tagging | `MOD_CIA_METADATA` | `facciacomp.php`, `facquestionco.php` |
 | 15 | Feature 15: UG Theory CIA Marks Entry (Descriptive, Objective, Assignment) | `MOD_CIA_MARKS` | `facciamarks.php`, `facmarksentry.php` |
 | 16 | Feature 16: Condensed CIA Marks Ledger & Weighted Aggregates | `MOD_CIA_MARKS` | `facciamarkscondensed.php` |
 | 17 | Feature 17: UG Laboratory Day-to-Day & Internal Exam Assessment | `MOD_CIA_MARKS` | `facaddcialabmarks.php` |
 | 18 | Feature 18: Postgraduate (PG) and UG Project Assessment Workflows | `MOD_CIA_MARKS` | `facaddpgciamarks.php`, `facaddprojectciamarks.php` |
-| 19 | Feature 19: CIA Examination Artifacts & Document Attachments | `MOD_CIA_MARKS` | `facciaattachments.php` |
+| 19 | Feature 19: CIA Examination Artifacts & Document Attachments | `MOD_CIA_METADATA` | `facciaattachments.php` |
 | **Part VI** | **Semester End Examinations (SEE) & Results** | | |
-| 20 | Feature 20: Semester End Examination (SEE) Evaluation (Modes A, B, and C) | `MOD_SEE_MARKS` | `facseemarks.php`, `facseedirectmarks.php` |
+| 20 | Feature 20: Semester End Examination (SEE) Evaluation (Modes A, B, and C) | `MOD_SEE_MARKS` | `facseemarks.php`, `facseedirectmarks.php`, `attainmentimport.php` |
 | **Part VII** | **Accreditation Analytics, Compliance & Continuous Quality** | | |
 | 21 | Feature 21: Course Delivery Reconciliation & NBA Criterion 2.2 Audit | `MOD_LESSON_PLAN` | `faclessonplanreconciliation.php` |
 | 22 | Feature 22: OBE Direct & Indirect Attainment Analysis Dashboard | `MOD_OBE_ANALYSIS` | `facciaanalysis2.php` |
 | 23 | Feature 23: Student Feedback Analytics & Exit Survey Reports | `MOD_FEEDBACK` | `facviewfeedback.php` |
-| 24 | Feature 24: Course Review & CQI Action Tracking Queue | `MOD_CQI_ACTION_TRACKING` | `reviewqueue.php` |
+| 24 | Feature 24: Course Review, CQI Action Tracking & Optional AI Assistance | `MOD_CQI_ACTION_TRACKING` / `MOD_AI_ASSISTANCE` | `reviewqueue.php`, `aiassistance.php` |
 | **Part VIII**| **Security & Session Management** | | |
 | 25 | Feature 25: Account Security & Self-Service Password Management | System Core | `facchgpwd.php`, `logout.php` |
 
@@ -526,7 +526,7 @@ This feature provides instructors with complete visibility over classroom attend
 
 #### C. Generating the Official University e-Bluebook PDF
 1. On the attendance view screen, click the button labeled **<i class="bi bi-file-earmark-pdf"></i> Download Official e-Bluebook**.
-2. The system executes `EBluebookPDFService.php` and dynamically compiles a complete, publication-grade document containing:
+2. The system executes `services/EBluebookPDFService.php` (alongside `services/CourseMasterFilePDFService.php` for full course dossiers via `download_course_dossier.php`) and dynamically compiles a complete, publication-grade document containing:
    - **Cover Page & Section 1**: Institutional header, course details, faculty credentials, and student nominal roll.
    - **Section 2A**: Formulated Lecture Lesson Plan (Planned Schedule).
    - **Section 2B**: Statutory 4-Column Lecturer Diary (Date, Hour, Topic Covered, Faculty Signature).
@@ -1254,14 +1254,16 @@ Accreditation bodies (NBA / NAAC) require complete documentary evidence for all 
 - **Navigation**: **Top Menu** &rarr; **Other Options** &rarr; **Assessments & Analysis** Card &rarr; **Enter SEE Marks & MetaData** (`facseemarks.php`)
 - **Direct Marks Ledger**: `facseedirectmarks.php`
 - **Question Definitions**: `facseecompques.php`
+- **CSV Marks & Attainment Import**: `attainmentimport.php`
 
 ---
 
 ### 20.2 Purpose & Scope
-While continuous internal assessment (CIA) accounts for 30% to 40% of the course weightage, the **Semester End Examination (SEE)** conducted by the university accounts for 60% to 70%. To compute total Course Outcome direct attainment, external examination marks must be integrated. The platform provides three flexible operational modes to accommodate varying departmental procedures:
-- **Mode A (Question-by-Question Granular Scoring)**: Evaluates detailed external exam questions mapped to COs.
-- **Mode B (Direct Marks Ledger)**: Direct entry of consolidated external marks scaled out of 70.00.
-- **Mode C (1-Click Auto-Sync from Published Results)**: Automatically pulls official external marks from the central Academic Examination Branch results publication database.
+While continuous internal assessment (CIA) accounts for 30% to 40% of the course weightage, the **Semester End Examination (SEE)** conducted by the university accounts for 60% to 70%. To compute total Course Outcome direct attainment, external examination marks must be integrated. The platform provides three primary operational modes plus an audited CSV import tool to accommodate varying departmental procedures:
+- **Mode A (Question-by-Question Granular Scoring)**: Evaluates detailed external exam questions mapped to COs (`evidence_basis = 'QUESTION_WISE'`).
+- **Mode B (Direct Marks Ledger)**: Direct entry of consolidated external marks (`evidence_basis = 'DIRECT_GRADE_PROXY'`).
+- **Mode C (1-Click Auto-Sync from Published Results)**: Automatically pulls official external marks from the central Academic Examination Branch results publication database (`evidence_basis = 'PUBLISHED_RESULT_SYNC'`).
+- **CSV Bulk Import (`attainmentimport.php`)**: Supports dry-run validation and audited bulk import of `SEE_DIRECT` or `CO_DIRECT_SUMMARY` marks via `Services\AttainmentImportService`.
 
 ---
 
@@ -1274,7 +1276,7 @@ While continuous internal assessment (CIA) accounts for 30% to 40% of the course
 4. The system executes `ExamResultsService::syncResultsToSeeMarks()`:
    - It matches student hall ticket numbers against the published university ledger.
    - It automatically extracts external marks, letter grades, and credits.
-   - It writes them directly into the course SEE evaluation table without manual typing.
+   - It writes them directly into the course SEE evaluation table without manual typing (and records a snapshot and `audit_logs` entry if replacing existing marks).
 
 #### Mode B: Direct Marks Ledger Entry (`facseedirectmarks.php`)
 1. If entering marks manually from university broadsheets, click **Direct SEE Marks Ledger**.
@@ -1282,9 +1284,14 @@ While continuous internal assessment (CIA) accounts for 30% to 40% of the course
 3. Click **Save SEE Ledger**.
 
 #### Mode A: Question-Level Blueprint & Scoring (`facseecompques.php`)
-1. Configure external question paper blueprints (compulsory short questions and Either/Or choice groups).
+1. Configure external question paper blueprints (compulsory short questions and Either/Or choice groups via `Services\SEEBlueprintService`).
 2. Map external questions to Course Outcomes (CO1 to CO6).
 3. Record question-by-question student marks.
+
+#### CSV Bulk Import (`attainmentimport.php`)
+1. Navigate to `attainmentimport.php` and download the CSV template for `SEE_DIRECT` or `CO_DIRECT_SUMMARY`.
+2. Upload the completed CSV file to run a dry-run validation (`attainment_import_batches` and `attainment_import_rows`).
+3. Confirm and commit the validated rows.
 
 ---
 
@@ -1505,15 +1512,16 @@ Student feedback is a statutory quality assurance requirement for NAAC and NBA a
 
 <div class="page-break"></div>
 
-# Feature 24: Course Review & CQI Action Tracking Queue
+# Feature 24: Course Review, CQI Action Tracking & Optional AI Assistance
 
 ### 24.1 Navigation Path
-- **Navigation**: **Top Menu** &rarr; **Home** &rarr; Top Button **Course review and action tracking** (`reviewqueue.php`)
+- **Course Review & CQI Queue**: **Top Menu** &rarr; **Home** &rarr; Top Button **Course review and action tracking** (`reviewqueue.php`)
+- **Optional AI Assistance**: **Other Options** &rarr; **AI Academic Assistance** (`aiassistance.php`, when `MOD_AI_ASSISTANCE` is enabled)
 
 ---
 
 ### 24.2 Purpose & Scope
-Continuous Quality Improvement (CQI) is the core operational principle of modern accreditation. When Course Outcome attainment targets are not achieved, or when student feedback identifies curriculum gaps, faculty must not simply record the shortfall—they must document **Action Taken Reports (ATR)** and track corrective interventions through to closure. This feature provides an interactive queue managing the full lifecycle of quality improvements.
+Continuous Quality Improvement (CQI) is the core operational principle of modern accreditation. When Course Outcome attainment targets are not achieved, or when student feedback identifies curriculum gaps, faculty must not simply record the shortfall—they must document **Action Taken Reports (ATR)** and track corrective interventions through to verified closure (`Services\AcademicReviewService`). Additionally, when `MOD_AI_ASSISTANCE` is enabled by the institution, faculty can use `aiassistance.php` (`Services\AIJobService`) to generate advisory CO attainment narratives and ATR draft proposals.
 
 ---
 
@@ -1521,14 +1529,14 @@ Continuous Quality Improvement (CQI) is the core operational principle of modern
 ```
 [PENDING / DEFICIT IDENTIFIED]
              │
-             ▼  (HOD Review & Approval)
-         [APPROVED]
+             ▼  (HOD Review & Approval / Revision Request)
+    [APPROVED / IN_PROGRESS]
              │
-             ▼  (Faculty Interventions Executed)
+             ▼  (Faculty Interventions & Evidence Logged)
          [COMPLETED]
              │
-             ▼  (HOD Audit & Closure)
-          [CLOSED]
+             ▼  (HOD Verification & Closure Assessment)
+     [VERIFIED -> CLOSED]
 ```
 
 ---
@@ -1536,15 +1544,16 @@ Continuous Quality Improvement (CQI) is the core operational principle of modern
 ### 24.4 Step-by-Step Instructions
 1. Navigate to **Home Dashboard** &rarr; click **Course review and action tracking** (`reviewqueue.php`).
 2. The page renders two analytical sections:
-   - **Course Delivery Submissions**: Shows the approval status of your end-of-term lesson plan compliance audits (`PENDING`, `APPROVED`, or `REJECTED`).
+   - **Course Delivery Submissions**: Shows the approval status of your end-of-term lesson plan compliance audits (`PENDING`, `APPROVED`, or `REVISION_REQUESTED`).
    - **Quality Improvement Actions (CQI)**: Shows all active action items linked to your courses.
 3. To update an action item assigned to you:
-   - Review the proposed action and target due date set during the previous cycle.
-   - In the **Observations / Execution Evidence** box, describe the corrective actions taken (e.g., *"Conducted 3 additional tutorial hours on Relational Calculus; provided solved question bank to students scoring below 50%"*).
-   - In the decision dropdown, select **COMPLETED**.
+   - Review the proposed action, target KPI, and due date.
+   - In the **Observations / Execution Evidence** box, describe the corrective actions taken and attach supporting evidence URLs if applicable.
+   - In the decision dropdown, select **IN_PROGRESS** or **COMPLETED**.
    - Click **Save Decision**.
-4. The item escalates to the HOD for final verification and formal closure.
+4. The item escalates to the HOD for verification (`VERIFIED`) and formal closure (`CLOSED` with `closure_summary`, `effectiveness_status`, and `next_cycle_decision`).
 5. Click **Download Action Taken Report (`download_atr.php`)** to export the signed statutory ATR document.
+6. *(Optional)* If `MOD_AI_ASSISTANCE` is enabled, open `aiassistance.php` to request advisory suggestions for CQI action items, CO-Bloom alignment, or delivery gap summaries. Every AI suggestion is strictly advisory and requires explicit faculty review (`ACCEPTED` or `REJECTED`) before any record is updated.
 
 ---
 
@@ -1559,12 +1568,12 @@ Continuous Quality Improvement (CQI) is the core operational principle of modern
 - **Execution Evidence Entered by Dr. Sharma**:
   > *"Conducted two 2-hour weekend remedial workshops on October 25 and November 01. Thirty-two students attended. Re-tested with a diagnostic quiz where 84% demonstrated mastery of BCNF criteria."*
 - **Action Selected**: `COMPLETED` &rarr; Saved.
-- **HOD Verification**: HOD reviews attendance records and diagnostic quiz results, enters follow-up findings, and selects `CLOSED`.
+- **HOD Verification & Closure**: HOD reviews attendance records and diagnostic quiz results, records `effectiveness_status = 'EFFECTIVE'` and `next_cycle_decision = 'STANDARDIZE'`, and transitions the item to `CLOSED`.
 
 ---
 
 ### 24.6 System Validations & Integrity Rules
-- **Role-Based State Gates**: Faculty can only transition actions from `REVISION_REQUESTED` to `REVISED` or from `APPROVED` to `COMPLETED`. Only the Head of Department (HOD) possesses administrative authority to mark an action as `CLOSED`.
+- **Role-Based State Gates**: Faculty can transition actions from `REVISION_REQUESTED` to `REVISED` or from `APPROVED` to `IN_PROGRESS` / `COMPLETED`. Only the Head of Department (HOD) or Principal/SuperAdmin possesses authority to verify (`VERIFIED`) and close (`CLOSED`) an action item with a non-empty `closure_summary`. Every transition is immutably logged in `workflow_review_history` and `audit_logs`.
 
 <div class="page-break"></div>
 
@@ -1623,7 +1632,7 @@ This feature enables faculty members to maintain account security by updating th
 - Current Password: `••••••••••••`
 - New Password: `Dbms#Faculty2026!`
 - Confirm Password: `Dbms#Faculty2026!`
-- Result: Updated successfully. A timestamped security log is recorded in `user_activity_logs`.
+- Result: Updated successfully. A timestamped security log is recorded in `audit_logs` (and `fac_activity_logs`).
 
 ---
 

@@ -111,22 +111,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $errMsg = "Please select a CSV file to upload.";
             } else {
                 try {
-                    $res=$examService->previewResultsCsv($notifId,$_FILES['results_csv']['tmp_name']);
+                    $res=$examService->previewResultsCsv($notifId,$_FILES['results_csv']['tmp_name'],$_POST['import_mode']??'MERGE');
                     if(!$res['status']){$errMsg=implode(' | ',array_slice($res['errors'],0,20));}
                     else {
                         if(!empty($_SESSION['results_preview']['path'])){@unlink($_SESSION['results_preview']['path']);}
                         $path=tempnam(sys_get_temp_dir(),'cea-results-');chmod($path,0600);
                         if(!copy($_FILES['results_csv']['tmp_name'],$path)){throw new RuntimeException('Unable to store results preview.');}
-                        $_SESSION['results_preview']=['path'=>$path,'hash'=>$res['source_hash'],'notification'=>$notifId,'token'=>bin2hex(random_bytes(32)),'rows'=>array_slice($res['rows'],0,20),'count'=>count($res['rows']),'expires'=>time()+1800];
+                        $_SESSION['results_preview']=['path'=>$path,'hash'=>$res['source_hash'],'validation_hash'=>$res['validation_hash'],'notification'=>$notifId,'token'=>bin2hex(random_bytes(32)),'rows'=>array_slice($res['rows'],0,20),'count'=>count($res['rows']),'expires'=>time()+1800,'mode'=>$res['mode'],'changes'=>$res['changes'],'changed_sample'=>$res['changed_sample'],'removed_sample'=>$res['removed_sample']];
                         $succMsg='Preview validated. Inspect the records below before importing the draft.';
                     }
                 }catch(Throwable $e){$errMsg=$e->getMessage();}
             }
         } elseif ($action === 'commit_results_preview') {
             $preview=$_SESSION['results_preview']??null;
-            if(!$preview||$preview['expires']<time()||!hash_equals($preview['token'],$_POST['preview_token']??'')||!is_file($preview['path'])||!hash_equals($preview['hash'],hash_file('sha256',$preview['path']))){$errMsg='The preview expired or changed. Upload and validate the file again.';}
+            if(!$preview||empty($preview['validation_hash'])||$preview['expires']<time()||!hash_equals($preview['token'],$_POST['preview_token']??'')||!is_file($preview['path'])||!hash_equals($preview['hash'],hash_file('sha256',$preview['path']))){$errMsg='The preview expired or changed. Upload and validate the file again.';}
             else{
-                $res=$examService->importResultsCsv((int)$preview['notification'],$preview['path'],$userId);
+                $res=$examService->importResultsCsv((int)$preview['notification'],$preview['path'],$userId,$preview['validation_hash'],$preview['mode']??'MERGE',trim($_POST['correction_reason']??''));
                 if($res['status']){$succMsg=$res['msg'];unlink($preview['path']);unset($_SESSION['results_preview']);}
                 else{$errMsg=$res['err'].' '.implode(' | ',array_slice($res['errors']??[],0,10));}
             }
@@ -217,7 +217,7 @@ if ($activeTab === 'reconciliation' && $reconNotifId > 0) {
                     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createNotifModal">
                         <i class="bi bi-plus-circle me-1"></i> New Exam Notification
                     </button>
-                    <a href="data:text/csv;charset=utf-8,HTNO,SubCode,SubName,Internals,Externals,Total,Grade,GradePoints,Credits,Status%0A21021A0501,20A05301T,Operating Systems,28,45,73,A,8,3,PASS" 
+                    <a href="data:text/csv;charset=utf-8,AdmissionNumber,SubCode,SubName,Internals,Externals,Total,Grade,GradePoints,Credits,Status%0A21021A0501,20A05301T,Operating Systems,28,45,73,B,8,3,PASS"
                        download="sample_exam_results_template.csv" class="btn btn-outline-secondary">
                         <i class="bi bi-download me-1"></i> Sample CSV Template
                     </a>
@@ -235,7 +235,7 @@ if ($activeTab === 'reconciliation' && $reconNotifId > 0) {
 
     <?php if (!empty($errMsg)): ?>
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i> <?= $errMsg; ?>
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> <?= htmlspecialchars($errMsg, ENT_QUOTES, 'UTF-8'); ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     <?php endif; ?>
@@ -261,6 +261,8 @@ if ($activeTab === 'reconciliation' && $reconNotifId > 0) {
                 <i class="bi bi-arrow-left-right me-1 text-info"></i> <?= $isCreditPromoEnabled ? '3.' : '2.'; ?> CIA vs Exam Internal Reconciliation & Discrepancies
             </a>
         </li>
+        <li class="nav-item"><a class="nav-link <?= $activeTab==='history'?'active':'' ?>" href="?tab=history&amp;notif_id=<?= (int)$reconNotifId ?>">Import history</a></li>
+        <li class="nav-item"><a class="nav-link <?= $activeTab==='readiness'?'active':'' ?>" href="?tab=readiness">Course policy readiness</a></li>
     </ul>
 
     <?php if ($activeTab === 'notifications'): ?>
@@ -294,7 +296,7 @@ if ($activeTab === 'reconciliation' && $reconNotifId > 0) {
                                 <tr>
                                     <td class="ps-3 text-muted"><?= $idx + 1; ?></td>
                                     <td>
-                                        <div class="fw-bold text-primary"><?= htmlspecialchars($n['notification_code']); ?></div>
+                                        <div class="fw-bold text-primary"><?= htmlspecialchars($n['notification_code']); ?> <span class="badge bg-light text-dark border"><?= htmlspecialchars($n['exam_type']); ?></span></div>
                                         <div class="small text-secondary"><?= htmlspecialchars($n['title']); ?></div>
                                     </td>
                                     <td>
@@ -327,10 +329,14 @@ if ($activeTab === 'reconciliation' && $reconNotifId > 0) {
                                                 data-bs-target="#uploadCsvModal"
                                                 data-id="<?= (int)$n['id']; ?>"
                                                 data-title="<?= htmlspecialchars($n['title']); ?>"
-                                                title="Upload Results CSV">
+                                                title="Upload Results CSV" <?= $n['workflow_status'] !== 'DRAFT' ? 'disabled' : ''; ?>>
                                             <i class="bi bi-upload"></i> Upload CSV
                                         </button>
 
+                                        <a href="?tab=history&amp;notif_id=<?= (int)$n['id'] ?>" class="btn btn-sm btn-outline-secondary">History</a>
+                                        <?php if(!$n['is_published'] && $n['workflow_status']==='REVIEWED'): ?>
+                                        <form method="post" class="d-inline"><input type="hidden" name="secretcode" value="<?= htmlspecialchars($_SESSION['secretcode']) ?>"><input type="hidden" name="action" value="toggle_publish"><input type="hidden" name="notification_id" value="<?= (int)$n['id'] ?>"><input type="hidden" name="new_status" value="0"><button class="btn btn-sm btn-outline-warning">Return to draft</button></form>
+                                        <?php endif; ?>
                                         <?php if(!$n['is_published'] && $n['workflow_status']==='DRAFT'): ?>
                                         <form method="post" class="d-inline"><input type="hidden" name="secretcode" value="<?= htmlspecialchars($_SESSION['secretcode']) ?>"><input type="hidden" name="action" value="review_results"><input type="hidden" name="notification_id" value="<?= (int)$n['id'] ?>"><input name="review_remarks" placeholder="Verification observations" required><button class="btn btn-sm btn-outline-primary">Mark reviewed</button></form>
                                         <?php endif; ?>
@@ -340,7 +346,7 @@ if ($activeTab === 'reconciliation' && $reconNotifId > 0) {
                                             <input type="hidden" name="notification_id" value="<?= (int)$n['id']; ?>">
                                             <input type="hidden" name="new_status" value="<?= $n['is_published'] ? 0 : 1; ?>">
                                             <button type="submit" class="btn btn-sm <?= $n['is_published'] ? 'btn-outline-warning' : 'btn-outline-success'; ?>" 
-                                                    title="<?= $n['is_published'] ? 'Unpublish from student view' : 'Publish to students'; ?>">
+                                                    title="<?= $n['is_published'] ? 'Withdraw results and invalidate dependent SEE marks' : 'Publish reviewed results and sync regular SEE marks'; ?>" <?= !$n['is_published'] && $n['workflow_status'] !== 'REVIEWED' ? 'disabled' : ''; ?>>
                                                 <?= $n['is_published'] ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>'; ?>
                                             </button>
                                         </form>
@@ -352,6 +358,8 @@ if ($activeTab === 'reconciliation' && $reconNotifId > 0) {
                 </table>
             </div>
         </div>
+    <?php elseif ($activeTab === 'history'): require __DIR__.'/views/results_import_history.php'; ?>
+    <?php elseif ($activeTab === 'readiness'): require __DIR__.'/views/results_readiness.php'; ?>
     <?php elseif ($isCreditPromoEnabled && $activeTab === 'simulation'): ?>
         <!-- Simulation Class Selector Card -->
         <div class="card shadow-sm border-0 mb-4 bg-white">
@@ -602,7 +610,7 @@ if ($activeTab === 'reconciliation' && $reconNotifId > 0) {
                     <div class="card border-0 shadow-sm p-3 h-100 bg-white">
                         <div class="text-muted small fw-semibold">Rounding Variances (&le; 1.0)</div>
                         <div class="fs-4 fw-bold text-warning mt-1"><?= (int)($sum['rounding_variances'] ?? 0); ?></div>
-                        <div class="small text-muted mt-auto">Acceptable Mid 80:20 rounding</div>
+                        <div class="small text-muted mt-auto">Review against the configured rounding rule</div>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -768,7 +776,7 @@ if ($activeTab === 'reconciliation' && $reconNotifId > 0) {
                 </div>
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Notification Title <span class="text-danger">*</span></label>
-                    <input type="text" name="title" class="form-control" placeholder="e.g. B.Tech III Year I Sem (R20) Regular & Supple Exams - Nov 2025" required>
+                    <input type="text" name="title" class="form-control" placeholder="e.g. B.Tech III Year I Sem (R20) Regular Exams - Nov 2025" required>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
@@ -813,10 +821,13 @@ if ($activeTab === 'reconciliation' && $reconNotifId > 0) {
                     </div>
                 </div>
                 <div class="mb-3">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" name="is_published" value="1" id="publishCheck" checked>
-                        <label class="form-check-label fw-semibold" for="publishCheck">Publish to student view immediately</label>
-                    </div>
+                    <label class="form-label fw-semibold" for="examType">Exam Type</label>
+                    <select class="form-select" id="examType" name="exam_type" required>
+                        <option value="REGULAR">Regular</option>
+                        <option value="SUPPLEMENTARY">Supplementary</option>
+                        <option value="REVALUATION">Revaluation</option>
+                    </select>
+                    <div class="form-text">Create a separate notification for each attempt. Results start as a draft and become visible after review and publication. Publishing regular results synchronizes available SEE evidence while preserving existing manual and question-wise marks.</div>
                 </div>
             </div>
             <div class="modal-footer bg-light border-0">
@@ -827,9 +838,7 @@ if ($activeTab === 'reconciliation' && $reconNotifId > 0) {
     </div>
 </div>
 
-<?php $preview=$_SESSION['results_preview']??null;if($preview && $preview['expires']>=time()): ?>
-<div class="container my-4 card p-3"><h4>Validated draft preview</h4><p><?= (int)$preview['count'] ?> records validated. Showing up to 20 records. Importing saves an unpublished draft.</p><div class="table-responsive"><table class="table"><tr><th>Hall ticket</th><th>Subject</th><th>Internal</th><th>External</th><th>Total</th><th>Grade</th><th>Credits</th><th>Status</th></tr><?php foreach($preview['rows'] as $r):?><tr><?php foreach(['htno','subject_code','internal_marks','external_marks','total_marks','grade_letter','credits_registered','result_status'] as $key):?><td><?= htmlspecialchars((string)$r[$key]) ?></td><?php endforeach;?></tr><?php endforeach;?></table></div><form method="post"><input type="hidden" name="action" value="commit_results_preview"><input type="hidden" name="secretcode" value="<?= htmlspecialchars($_SESSION['secretcode']) ?>"><input type="hidden" name="preview_token" value="<?= htmlspecialchars($preview['token']) ?>"><button class="btn btn-primary">Import validated draft</button></form></div>
-<?php endif; ?>
+<?php require __DIR__.'/views/results_import_preview.php'; ?>
 <!-- Modal: Upload Results CSV -->
 <div class="modal fade" id="uploadCsvModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -847,10 +856,13 @@ if ($activeTab === 'reconciliation' && $reconNotifId > 0) {
                     <div id="uploadNotifTitle" class="text-primary fw-semibold small"></div>
                 </div>
                 <div class="mb-3">
+                    <label class="form-label fw-semibold">Import behavior</label>
+                    <select name="import_mode" class="form-select mb-2"><option value="MERGE">Add or update the records in this file</option><option value="REPLACE">Replace the whole draft with this complete file</option></select>
+                    <p class="form-text">A complete-file replacement removes draft records omitted from the file. Review the changes before importing.</p>
                     <label class="form-label fw-semibold">Select Results CSV File <span class="text-danger">*</span></label>
                     <input type="file" name="results_csv" accept=".csv" class="form-control" required>
                     <div class="form-text small">
-                        Required columns: HTNO, SubCode, Internals, Externals, Total, Grade, GradePoints, Credits, Status. SubName is optional. The notification must match the original course offering and every course must have a curriculum mapping.
+                        Required columns: AdmissionNumber (or HTNO), SubCode, Internals, Externals, Total, Grade, GradePoints, Credits, Status. SubName is optional. Legacy result headers are accepted. Grades, credits and maximum marks must agree with the selected regulation and course rules.
                     </div>
                 </div>
             </div>

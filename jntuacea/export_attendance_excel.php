@@ -31,7 +31,7 @@ $selected_cls_id = $_POST['cls_id'];
 $start_date = !empty($_POST['start_date']) ? $_POST['start_date'] : null;
 $end_date = !empty($_POST['end_date']) ? $_POST['end_date'] : null;
 
-$studentList = $hodObj->getStudentsByClass($selected_cls_id);
+$studentList = $hodObj->getStudentsByClass($selected_cls_id, true);
 $subjectList = $hodObj->getSubjectsByClassID($selected_cls_id);
 
 $spreadsheet = new Spreadsheet();
@@ -114,7 +114,7 @@ if ($_POST['report_type'] == 'overall' || $_POST['report_type'] == 'enhanced') {
             if (!in_array($subject['subject_sno'], $sub_sno_array)) {
                 array_push($sub_sno_array, $subject['subject_sno']);
             }
-            $temp_attendanceData = $hodObj->getDetailedAttendanceBySubjectExcludingPermissions($subject['id'], $start_date, $end_date);
+            $temp_attendanceData = $hodObj->getDetailedAttendanceBySubjectExcludingPermissions($subject['id'], $start_date, $end_date, true);
             $subject_max_classes[$subject['subcode']] = 0;
             if (!empty($temp_attendanceData['data'])) {
                 foreach ($temp_attendanceData['data'] as $student) {
@@ -170,8 +170,11 @@ if ($_POST['report_type'] == 'overall' || $_POST['report_type'] == 'enhanced') {
     
     foreach ($studentList as $student) {
         $col = 'A';
+        $isInactive = (isset($student['status']) && (int)$student['status'] === 0);
+        $nameDisplay = $isInactive ? $student['name'] . ' (Inactive)' : $student['name'];
+        $rollNumberDisplay = $isInactive ? $student['roll_number'] . ' (Inactive)' : $student['roll_number'];
         $sheet->setCellValue($col++ . $row, $student['roll_number']);
-        $sheet->setCellValue($col++ . $row, $student['name']);
+        $sheet->setCellValue($col++ . $row, $nameDisplay);
         
         $tot_cls = 0;
         $tot_pre = 0;
@@ -203,9 +206,9 @@ if ($_POST['report_type'] == 'overall' || $_POST['report_type'] == 'enhanced') {
         
         // Collect statistics
         if ($overallPercentage < 65) {
-            $lessThan65[] = $student['roll_number'];
+            $lessThan65[] = $rollNumberDisplay;
         } elseif ($overallPercentage >= 65 && $overallPercentage < 75) {
-            $between65And75[] = $student['roll_number'];
+            $between65And75[] = $rollNumberDisplay;
         }
         
         $row++;
@@ -269,7 +272,7 @@ if ($_POST['report_type'] == 'overall' || $_POST['report_type'] == 'enhanced') {
             if (!in_array($subject['subject_sno'], $sub_sno_array)) {
                 array_push($sub_sno_array, $subject['subject_sno']);
             }
-            $temp_attendanceData = $hodObj->getDetailedAttendanceBySubjectExcludingPermissions($subject['id'], $start_date, $end_date);
+            $temp_attendanceData = $hodObj->getDetailedAttendanceBySubjectExcludingPermissions($subject['id'], $start_date, $end_date, true);
             $subject_max_classes[$subject['subcode']] = 0;
             if (!empty($temp_attendanceData['data'])) {
                 foreach ($temp_attendanceData['data'] as $student) {
@@ -307,8 +310,11 @@ if ($_POST['report_type'] == 'overall' || $_POST['report_type'] == 'enhanced') {
     
     foreach ($studentList as $student) {
         $col = 'A';
+        $isInactive = (isset($student['status']) && (int)$student['status'] === 0);
+        $nameDisplay = $isInactive ? $student['name'] . ' (Inactive)' : $student['name'];
+        $rollNumberDisplay = $isInactive ? $student['roll_number'] . ' (Inactive)' : $student['roll_number'];
         $sheet->setCellValue($col++ . $row, $student['roll_number']);
-        $sheet->setCellValue($col++ . $row, $student['name']);
+        $sheet->setCellValue($col++ . $row, $nameDisplay);
         
         foreach ($sub_sno_array as $sno) {
             if (isset($attendanceData[$student['roll_number']][$sno])) {
@@ -317,9 +323,9 @@ if ($_POST['report_type'] == 'overall' || $_POST['report_type'] == 'enhanced') {
                 
                 // Collect statistics
                 if ($percentage < 65) {
-                    $lessThan65BySubject[$sno][] = $student['roll_number'];
+                    $lessThan65BySubject[$sno][] = $rollNumberDisplay;
                 } elseif ($percentage >= 65 && $percentage < 75) {
-                    $between65And75BySubject[$sno][] = $student['roll_number'];
+                    $between65And75BySubject[$sno][] = $rollNumberDisplay;
                 }
             } else {
                 $sheet->setCellValue($col++ . $row, '-');

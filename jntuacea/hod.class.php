@@ -451,14 +451,15 @@ class HOD extends User
         return $res;
     }
 
-    public function getStudentsByClass($class_id)
+    public function getStudentsByClass($class_id, $includeInactive = false)
     {
         $res = array();
         try {
-            $stmt = $this->conn->prepare("SELECT s.id, s.username as roll_number, u.name, u.email, u.mobile, u.status, u.role
+            $statusClause = $includeInactive ? "" : " AND s.status = 1";
+            $stmt = $this->conn->prepare("SELECT s.id, s.username as roll_number, u.name, u.email, u.mobile, s.status, u.role
                  FROM students s
                  JOIN users u ON s.username = u.username
-                 WHERE s.class_id = ? AND s.status = 1 ORDER BY s.username");
+                 WHERE s.class_id = ?" . $statusClause . " ORDER BY s.username");
             $stmt->bind_param("i", $class_id);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -1125,7 +1126,7 @@ class HOD extends User
 
         try {
             $stmt = $this->conn->prepare("
-                SELECT sub.sub_fullname, c.classname, c.acad_year, c.reg_id
+                SELECT sub.sub_fullname, sub.subcode, sub.sub_type, c.classname, c.acad_year, c.yearsem, c.section, c.start_date, c.end_date, c.reg_id
                 FROM subjects sub
                 JOIN classes c ON sub.class_id = c.id
                 WHERE sub.id = ?
@@ -1136,12 +1137,18 @@ class HOD extends User
 
             $stmt->bind_param("i", $sub_id);
             if ($stmt->execute()) {
-                $stmt->bind_result($sub_fullname, $classname, $acad_year, $reg_id);
+                $stmt->bind_result($sub_fullname, $subcode, $sub_type, $classname, $acad_year, $yearsem, $section, $start_date, $end_date, $reg_id);
                 if ($stmt->fetch()) {
                     $res['data'] = [
                         'sub_fullname' => $sub_fullname,
+                        'subcode' => $subcode,
+                        'sub_type' => $sub_type,
                         'classname' => $classname,
                         'acad_year' => $acad_year,
+                        'yearsem' => $yearsem,
+                        'section' => $section,
+                        'start_date' => $start_date,
+                        'end_date' => $end_date,
                         'reg_id' => $reg_id
                     ];
                     $res['status'] = 1;
@@ -1150,8 +1157,34 @@ class HOD extends User
                 $this->logs->errLog($myname . "Statement not executed: " . $this->conn->error);
             }
             $stmt->close();
-            $facnames = $this->getFacNamesBySubID($sub_id);
-            $res['data']['faculty_name'] = implode(', ', $facnames["data"]);
+
+            if ($res['data'] !== null) {
+                $facnames = $this->getFacNamesBySubID($sub_id);
+                if (empty($facnames["data"])) {
+                    $dStmt = $this->conn->prepare("
+                        SELECT DISTINCT u.name 
+                        FROM diary d
+                        JOIN faculties f ON d.faculty_id = f.id
+                        JOIN users u ON f.username = u.username
+                        WHERE d.sub_id = ?
+                        ORDER BY d.id DESC
+                    ");
+                    if ($dStmt) {
+                        $dStmt->bind_param("i", $sub_id);
+                        if ($dStmt->execute()) {
+                            $dRes = $dStmt->get_result();
+                            while ($dRow = $dRes->fetch_assoc()) {
+                                if (!empty($dRow['name'])) {
+                                    $facnames["data"][] = trim($dRow['name']);
+                                }
+                            }
+                        }
+                        $dStmt->close();
+                    }
+                }
+                $facStr = implode(', ', array_unique($facnames["data"]));
+                $res['data']['faculty_name'] = !empty($facStr) ? $facStr : 'N/A';
+            }
         } catch (Exception $e) {
             $this->logs->errLog($myname . "Exception: " . $e->getMessage());
         }
@@ -1748,16 +1781,21 @@ class HOD extends User
         return $res;
     }
 
-    public function getDetailedAttendanceBySubjectExcludingPermissions($sub_id, $start_date = null, $end_date = null)
+    public function getDetailedAttendanceBySubjectExcludingPermissions($sub_id, $start_date = null, $end_date = null, $includeInactive = false)
     {
         $res = ['status' => 0, 'data' => []];
         try {
+            $this->assertSubjectScope((int)$sub_id);
+            require_once __DIR__ . '/core/DateRange.php';
+            $start_date = $start_date === '' ? null : $start_date;
+            $end_date = $end_date === '' ? null : $end_date;
+            \College\DateRange::validate($start_date, $end_date);
             $dateHours  = [];
             $hours      = [];
             $dateFilter = "";
 
             if ($start_date && $end_date) {
-                $dateFilter = "AND a.date BETWEEN '$start_date' AND '$end_date'";
+                $dateFilter = "AND a.date BETWEEN ? AND ?";
             }
 
             // ── Query 1: Distinct date-hour column headers ────────────────────────
@@ -1771,7 +1809,8 @@ class HOD extends User
             $dateFilter
             ORDER BY a.date, ct.id
         ")) {
-                $stmt->bind_param("i", $sub_id);
+                if ($start_date !== null) { $stmt->bind_param("iss", $sub_id, $start_date, $end_date); }
+                else { $stmt->bind_param("i", $sub_id); }
                 if ($stmt->execute()) {
                     $stmt->bind_result($date, $hour_id, $hour);
                     while ($stmt->fetch()) {
@@ -1786,8 +1825,9 @@ class HOD extends User
             }
 
             // ── Query 2: Per-student attendance, permission hours excluded ─────────
+            $statusClause = $includeInactive ? "" : "AND s.status = 1";
             if ($stmt = $this->conn->prepare("
-            SELECT u.name, s.username, a.date, a.hour, a.status
+            SELECT u.name, s.username, a.date, a.hour, a.status, s.status as student_status
             FROM student_sub ss
             JOIN students  s  ON ss.stu_id   = s.id
             JOIN users     u  ON s.username  = u.username
@@ -1799,7 +1839,7 @@ class HOD extends User
                 AND sp.date   = a.date
                 AND sp.hour   = a.hour
             WHERE ss.sub_id = ?
-              AND s.status  = 1
+              $statusClause
               AND sp.id     IS NULL
               AND (a.date >= COALESCE(
                       s.date_of_joining,
@@ -1809,9 +1849,10 @@ class HOD extends User
             $dateFilter
             ORDER BY s.username
         ")) {
-                $stmt->bind_param("ii", $sub_id, $sub_id);
+                if ($start_date !== null) { $stmt->bind_param("iiss", $sub_id, $sub_id, $start_date, $end_date); }
+                else { $stmt->bind_param("ii", $sub_id, $sub_id); }
                 if ($stmt->execute()) {
-                    $stmt->bind_result($name, $username, $date, $hour, $status);
+                    $stmt->bind_result($name, $username, $date, $hour, $status, $studentStatus);
 
                     $students = [];
                     while ($stmt->fetch()) {
@@ -1820,11 +1861,12 @@ class HOD extends User
 
                         if (!isset($students[$username])) {
                             $students[$username] = [
-                                'name'          => $name,
-                                'username'      => $username,
-                                'attendance'    => array_fill_keys($dateHours, '-'),
-                                'total_present' => 0,
-                                'total_classes' => 0
+                                'name'           => $name,
+                                'username'       => $username,
+                                'student_status' => (int)$studentStatus,
+                                'attendance'     => array_fill_keys($dateHours, '-'),
+                                'total_present'  => 0,
+                                'total_classes'  => 0
                             ];
                         }
 
@@ -1851,6 +1893,7 @@ class HOD extends User
                 $this->logs->errLog("Not prepared: " . $this->conn->error);
             }
         } catch (Exception $e) {
+            $res['err'] = $e->getMessage();
             $this->logs->errLog("Exception: " . $e->getMessage());
         }
         return $res;

@@ -17,14 +17,24 @@ $attendanceService = new StudentAttendanceService();
 // Fetch classes and their corresponding subjects for the student
 $classes = $studentRepo->getEnrolledClassesByUsername($_SESSION['user']);
 
-// Get current active class for today's schedule
+// Get current active class for today's schedule (preferring active enrollment)
 $currentClass = null;
 foreach ($classes as $class) {
     $endDate = new DateTime($class['end_date']);
     $endDate->setTime(23, 59, 59);
-    if ($endDate >= new DateTime()) {
+    if ((int)($class['student_status'] ?? 1) === 1 && $endDate >= new DateTime()) {
         $currentClass = $class;
         break;
+    }
+}
+if (!$currentClass) {
+    foreach ($classes as $class) {
+        $endDate = new DateTime($class['end_date']);
+        $endDate->setTime(23, 59, 59);
+        if ($endDate >= new DateTime()) {
+            $currentClass = $class;
+            break;
+        }
     }
 }
 
@@ -304,18 +314,24 @@ if ($currentClass) {
                         $endDate = new DateTime($class['end_date']);
                         $endDate->setTime(23, 59, 59);
                         $isClassEnded = $endDate < $currentDate;
+                        $isStudentInactive = isset($class['student_status']) && (int)$class['student_status'] === 0;
                         ?>
                         <div class="col-md-6 mb-3">
-                            <div class="card bg-light <?php echo $isClassEnded ? 'text-secondary' : 'text-primary'; ?>">
+                            <div class="card bg-light <?php echo ($isClassEnded || $isStudentInactive) ? 'text-secondary' : 'text-primary'; ?>">
                                 <div class="card-body">
-                                    <h5 class="card-title"><?= htmlspecialchars($class['classname']); ?></h5>
+                                    <h5 class="card-title">
+                                        <?= htmlspecialchars($class['classname']); ?>
+                                        <?php if ($isStudentInactive): ?>
+                                            <span class="badge bg-secondary ms-1">Inactive / Shifted</span>
+                                        <?php endif; ?>
+                                    </h5>
                                     <p class="card-text">Academic Year: <?= htmlspecialchars($class['acad_year']); ?></p>
                                     <form action="studentsubjects.php" method="post">
                                         <input type="hidden" name="student_id" value="<?= $class['student_id']; ?>">
                                         <input type="hidden" name="class_id" value="<?= $class['class_id']; ?>">
                                         <input type="hidden" name="classname" value="<?= $class['classname']; ?>">
                                         <input type="hidden" name="acad_year" value="<?= $class['acad_year']; ?>">
-                                        <button type="submit" class="btn <?php echo $isClassEnded ? 'btn-outline-secondary' : 'btn-outline-success'; ?>">View Subjects</button>
+                                        <button type="submit" class="btn <?php echo ($isClassEnded || $isStudentInactive) ? 'btn-outline-secondary' : 'btn-outline-success'; ?>">View Subjects</button>
                                     </form>
                                 </div>
                             </div>

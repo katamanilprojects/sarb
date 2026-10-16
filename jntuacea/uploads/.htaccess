@@ -1,0 +1,11 @@
+# Academic evidence is downloaded through authorized PHP endpoints.
+Options -Indexes
+<FilesMatch "(?i)^(?:cia_(?!(?:format_Theory_ug\.xlsx|QP_format_theory_ug\.docx)$)[^.]+\.[^.]+|e_bluebook_.*\.pdf|feedback_.*\.pdf)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

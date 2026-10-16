@@ -20,13 +20,13 @@ graph TD
 
     subgraph Presentation & Exports
         Service --> Web[Web Presentation: modulefeedback.php]
-        Service --> PDF[Enhanced PDF Dossier: EnhancedPDFService.php]
-        Service --> Excel[Multi-Tab Workbook: FeedbackExcelService.php]
+        Service --> PDF[Enhanced PDF Dossier: services/EnhancedPDFService.php]
+        Service --> Excel[Multi-Tab Workbook: services/FeedbackExcelService.php]
     end
 
     subgraph Accreditation & Attainment
         COFB --> IndirectAttainment[Indirect CO Attainment Computation: facciaanalysis2.class.php]
-        CESFB --> IndirectPO[20% Indirect Exit Survey PO Attainment: BatchOBEService.php]
+        CESFB --> IndirectPO[20% Indirect Exit Survey PO Attainment: services/BatchOBEService.php]
     end
 ```
 
@@ -73,13 +73,13 @@ graph TD
 > **Strict Faculty Appraisal Anonymity**: Student feedback on instructors requires total confidentiality to guarantee honest, uncoerced student appraisals.
 > - In `student_faculty_feedback`, the column `is_anonymous` defaults to `1`.
 > - Student names and hall ticket roll numbers are completely suppressed from faculty, HOD, and administrative views.
-> - Web views (`modulefeedback.php`), PDF reports (`EnhancedPDFService.php`), and Excel exports (`FeedbackExcelService.php`) never expose student identities for faculty appraisal responses.
+> - Web views (`modulefeedback.php`), PDF reports (`services/EnhancedPDFService.php`), and Excel exports (`services/FeedbackExcelService.php`) never expose student identities for faculty appraisal responses.
 
 ---
 
 ## 4. Multi-Granularity Analytics Engine (`FeedbackService`)
 
-Located in [`feedbackservice.class.php`](file:///Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/feedbackservice.class.php), this service aggregates feedback data at four distinct administrative levels:
+Located in [`feedbackservice.class.php`](../../jntuacea/feedbackservice.class.php), this service aggregates feedback data at four distinct administrative levels:
 
 | Method | Scope | Used By | Description |
 |---|---|---|---|
@@ -92,10 +92,10 @@ Located in [`feedbackservice.class.php`](file:///Applications/XAMPP/xamppfiles/h
 
 ## 5. Web Presentation Layer (`modulefeedback.php`)
 
-[`modulefeedback.php`](file:///Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/modulefeedback.php) provides a standardized, responsive interface component embedded inside:
-- [`facviewfeedback.php`](file:///Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/facviewfeedback.php) (Faculty personal view)
-- [`hodviewfeedback.php`](file:///Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/hodviewfeedback.php) (Departmental view)
-- [`adminviewfeedback.php`](file:///Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/adminviewfeedback.php) (Institutional administrator view)
+[`modulefeedback.php`](../../jntuacea/modulefeedback.php) provides a standardized, responsive interface component embedded inside:
+- [`facviewfeedback.php`](../../jntuacea/facviewfeedback.php) (Faculty personal view)
+- [`hodviewfeedback.php`](../../jntuacea/hodviewfeedback.php) (Departmental view)
+- [`adminviewfeedback.php`](../../jntuacea/adminviewfeedback.php) (Institutional administrator view)
 
 ### Layout Flow:
 1. **Executive KPI Cards**: Total enrolled students, total respondents, response percentage, and overall average score.
@@ -112,12 +112,12 @@ Located in [`feedbackservice.class.php`](file:///Applications/XAMPP/xamppfiles/h
 
 ## 6. Official Dossier Exports
 
-### 6.1 Enhanced PDF Reports (`EnhancedPDFService.php`)
+### 6.1 Enhanced PDF Reports (`services/EnhancedPDFService.php`)
 - Endpoint: `download_feedback_enhanced.php`
 - Powered by TCPDF to produce formal, print-ready institutional accreditation documents.
 - Includes institutional letterhead, meta summaries, all 5 rating distributions (5★, 4★, 3★, 2★, 1★) with proportional progress bars, domain breakdowns, and qualitative student feedback.
 
-### 6.2 Analytical Excel Workbooks (`FeedbackExcelService.php`)
+### 6.2 Analytical Excel Workbooks (`services/FeedbackExcelService.php`)
 - Endpoint: `download_feedback_excel.php`
 - Powered by PhpSpreadsheet to generate multi-worksheet analytical workbooks:
   - **Summary**: High-level metrics, enrollment, response rates, and average ratings.

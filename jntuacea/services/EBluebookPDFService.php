@@ -57,44 +57,51 @@ class EBluebookPDFService
 
         $dateHours = array_keys($attendanceData['data'][0]['attendance']);
         usort($dateHours, function ($a, $b) {
-            return strtotime($a) - strtotime($b);
+            $dateA = substr($a, 0, 10);
+            $dateB = substr($b, 0, 10);
+            if ($dateA !== $dateB) {
+                return strcmp($dateA, $dateB);
+            }
+            return strcmp($a, $b);
         });
 
         if (empty($start_date) && !empty($dateHours)) {
-            $p = explode('-', $dateHours[0]);
-            $start_date = $p[0] . '-' . $p[1] . '-' . $p[2];
+            $start_date = substr($dateHours[0], 0, 10);
         }
         if (empty($end_date) && !empty($dateHours)) {
-            $p = explode('-', end($dateHours));
-            $end_date = $p[0] . '-' . $p[1] . '-' . $p[2];
+            $lastIndex = count($dateHours) - 1;
+            $end_date = substr($dateHours[$lastIndex], 0, 10);
         }
 
         // Regulation detection
         $regulation = 'R23';
-        if ($rStmt = $this->conn->prepare("SELECT r.regulation FROM subjects s JOIN classes c ON s.class_id = c.id JOIN regulations r ON c.reg_id = r.id WHERE s.id = ?")) {
+        $regId = null;
+        if ($rStmt = $this->conn->prepare("SELECT c.reg_id, r.regulation FROM subjects s JOIN classes c ON s.class_id = c.id JOIN regulations r ON c.reg_id = r.id WHERE s.id = ?")) {
             $rStmt->bind_param("i", $sub_id);
             if ($rStmt->execute()) {
-                $rStmt->bind_result($foundReg);
-                if ($rStmt->fetch() && !empty($foundReg)) {
-                    $regulation = strtoupper(trim($foundReg));
+                $rStmt->bind_result($foundRegId, $foundReg);
+                if ($rStmt->fetch()) {
+                    if (!empty($foundRegId)) $regId = (int)$foundRegId;
+                    if (!empty($foundReg)) $regulation = strtoupper(trim($foundReg));
                 }
             }
             $rStmt->close();
         }
 
-        $minAggregatePct = (float)$this->settingsService->get('attendance_min_aggregate_pct', $regulation, 75.0);
-        $condoneFloor = (float)$this->settingsService->get('attendance_condone_floor_pct', $regulation, 65.0);
-        $minSubjectPct = (float)$this->settingsService->get('attendance_min_subject_pct', $regulation, 40.0);
+        $regParam = !empty($regId) ? $regId : $regulation;
+        $minAggregatePct = (float)$this->settingsService->get('attendance_min_aggregate_pct', $regParam, 75.0);
+        $condoneFloor = (float)$this->settingsService->get('attendance_condone_floor_pct', $regParam, 65.0);
+        $minSubjectPct = (float)$this->settingsService->get('attendance_min_subject_pct', $regParam, 40.0);
 
-        $midBetterWeight = (float)$this->settingsService->get('theory_mid_better_weight', $regulation, 0.80);
-        $midLesserWeight = (float)$this->settingsService->get('theory_mid_lesser_weight', $regulation, 0.20);
+        $midBetterWeight = (float)$this->settingsService->get('theory_mid_better_weight', $regParam, 0.80);
+        $midLesserWeight = (float)$this->settingsService->get('theory_mid_lesser_weight', $regParam, 0.20);
         $betterWeightPct = round($midBetterWeight * 100);
         $lesserWeightPct = round($midLesserWeight * 100);
 
-        $overallDirectPct = round((float)$this->settingsService->get('overall_direct_weight', $regulation, 0.80) * 100);
-        $overallIndirectPct = round((float)$this->settingsService->get('overall_indirect_weight', $regulation, 0.20) * 100);
-        $directCiaPct = round((float)$this->settingsService->get('attainment_direct_cia_weight', $regulation, 0.30) * 100);
-        $directSeePct = round((float)$this->settingsService->get('attainment_direct_see_weight', $regulation, 0.70) * 100);
+        $overallDirectPct = round((float)$this->settingsService->get('overall_direct_weight', $regParam, 0.80) * 100);
+        $overallIndirectPct = round((float)$this->settingsService->get('overall_indirect_weight', $regParam, 0.20) * 100);
+        $directCiaPct = round((float)$this->settingsService->get('attainment_direct_cia_weight', $regParam, 0.30) * 100);
+        $directSeePct = round((float)$this->settingsService->get('attainment_direct_see_weight', $regParam, 0.70) * 100);
 
         $studentsAttendance = [];
         $geMinAgg = [];
@@ -127,9 +134,6 @@ class EBluebookPDFService
             }
         }
 
-        $start_date_formatted = !empty($start_date) ? date('d-m-Y', strtotime($start_date)) : 'N/A';
-        $end_date_formatted = !empty($end_date) ? date('d-m-Y', strtotime($end_date)) : 'N/A';
-
         if (!empty($facid)) {
             $details = $this->facultyObj->getClassSubjectFacultyDetails($sub_id, $facid);
         } else {
@@ -138,49 +142,161 @@ class EBluebookPDFService
             $details = $hodObj->getClsSubFacBySubID($sub_id);
         }
 
-        $class_full = $details['data']['classname'] ?? '';
-        $subject = $details['data']['sub_fullname'] ?? '';
-        $faculty = $details['data']['faculty_name'] ?? 'N/A';
-        $acadYear = $details['data']['acad_year'] ?? date('Y') . '-' . (date('Y') + 1);
-        $subCode = $details['data']['subcode'] ?? '';
-
-        // Ensure subcode and subject name are accurate
-        $courseType = 'Theory';
-        if (empty($subCode) || empty($subject)) {
-            $sStmt = $this->conn->prepare("SELECT subcode, sub_fullname, sub_type FROM subjects WHERE id = ?");
-            if ($sStmt) {
-                $sStmt->bind_param("i", $sub_id);
-                if ($sStmt->execute()) {
-                    $sStmt->bind_result($dbSubcode, $dbSubname, $dbSubtype);
-                    if ($sStmt->fetch()) {
-                        if (empty($subCode)) $subCode = $dbSubcode;
-                        if (empty($subject)) $subject = $dbSubname;
-                        if (!empty($dbSubtype)) $courseType = ucfirst($dbSubtype);
-                    }
-                }
-                $sStmt->close();
+        // Comprehensive Subject & Class Relational Metadata Lookup
+        $metaRow = null;
+        $mStmt = $this->conn->prepare("
+            SELECT 
+                s.id AS sub_id,
+                s.subcode,
+                s.sub_fullname,
+                s.sub_type,
+                s.class_id,
+                c.classname,
+                c.acad_year,
+                c.yearsem,
+                c.section,
+                c.start_date AS class_start_date,
+                c.end_date AS class_end_date,
+                r.regulation,
+                sp.id AS spec_id,
+                sp.spec_fullname,
+                sp.spec_shortname,
+                p.id AS prog_id,
+                p.prog_fullname,
+                p.prog_shortname,
+                d.id AS dept_id,
+                d.dept_fullname
+            FROM subjects s
+            JOIN classes c ON s.class_id = c.id
+            LEFT JOIN regulations r ON c.reg_id = r.id
+            LEFT JOIN specialization sp ON c.spec_id = sp.id
+            LEFT JOIN programs p ON sp.prog_id = p.id
+            LEFT JOIN departments d ON sp.dept_id = d.id
+            WHERE s.id = ?
+        ");
+        if ($mStmt) {
+            $mStmt->bind_param("i", $sub_id);
+            if ($mStmt->execute()) {
+                $mRes = $mStmt->get_result();
+                $metaRow = $mRes->fetch_assoc();
             }
+            $mStmt->close();
+        }
+
+        // Subject & Code
+        $subject = !empty($metaRow['sub_fullname']) ? trim($metaRow['sub_fullname']) : (!empty($details['data']['sub_fullname']) ? trim($details['data']['sub_fullname']) : '');
+        $subCode = !empty($metaRow['subcode']) ? trim($metaRow['subcode']) : (!empty($details['data']['subcode']) ? trim($details['data']['subcode']) : '');
+        $courseType = !empty($metaRow['sub_type']) ? ucfirst(trim($metaRow['sub_type'])) : (!empty($details['data']['sub_type']) ? ucfirst(trim($details['data']['sub_type'])) : 'Theory');
+        $acadYear = !empty($metaRow['acad_year']) ? trim($metaRow['acad_year']) : (!empty($details['data']['acad_year']) ? trim($details['data']['acad_year']) : (date('Y') . '-' . (date('Y') + 1)));
+
+        // Regulation
+        if (!empty($metaRow['regulation'])) {
+            $regulation = strtoupper(trim($metaRow['regulation']));
         }
 
         // Department Name
-        $deptName = 'Electronics & Communication Engineering';
-        $dStmt = $this->conn->prepare("
-            SELECT d.dept_fullname 
-            FROM subjects s 
-            JOIN classes c ON s.class_id = c.id 
-            JOIN specialization sp ON c.spec_id = sp.id 
-            JOIN departments d ON sp.dept_id = d.id 
-            WHERE s.id = ?
-        ");
-        if ($dStmt) {
-            $dStmt->bind_param("i", $sub_id);
-            if ($dStmt->execute()) {
-                $dStmt->bind_result($foundDept);
-                if ($dStmt->fetch() && !empty($foundDept)) {
-                    $deptName = $foundDept;
+        $deptName = '';
+        if (!empty($metaRow['dept_fullname'])) {
+            $deptName = trim($metaRow['dept_fullname']);
+        } elseif (!empty($_SESSION['dept_id'])) {
+            $dStmt = $this->conn->prepare("SELECT dept_fullname FROM departments WHERE id = ?");
+            if ($dStmt) {
+                $dStmt->bind_param("i", $_SESSION['dept_id']);
+                if ($dStmt->execute()) {
+                    $dStmt->bind_result($foundDept);
+                    if ($dStmt->fetch() && !empty($foundDept)) {
+                        $deptName = trim($foundDept);
+                    }
                 }
+                $dStmt->close();
             }
-            $dStmt->close();
+        }
+        if (empty($deptName) && !empty($metaRow['spec_fullname'])) {
+            $deptName = $metaRow['spec_fullname'];
+        }
+        if (empty($deptName)) {
+            $deptName = 'Engineering';
+        }
+
+        // Faculty / Course Instructor
+        $faculty = '';
+        if (!empty($facid)) {
+            $fStmt = $this->conn->prepare("
+                SELECT u.name 
+                FROM faculties f 
+                JOIN users u ON f.username = u.username 
+                WHERE f.id = ?
+            ");
+            if ($fStmt) {
+                $fStmt->bind_param("i", $facid);
+                if ($fStmt->execute()) {
+                    $fRes = $fStmt->get_result();
+                    if ($fRow = $fRes->fetch_assoc()) {
+                        $faculty = trim($fRow['name']);
+                    }
+                }
+                $fStmt->close();
+            }
+        }
+        if (empty($faculty) && !empty($details['data']['faculty_name']) && $details['data']['faculty_name'] !== 'N/A') {
+            $faculty = trim($details['data']['faculty_name']);
+        }
+        if (empty($faculty)) {
+            // Check faculty_sub mapping
+            $fsStmt = $this->conn->prepare("
+                SELECT DISTINCT u.name 
+                FROM faculty_sub fs
+                JOIN faculties f ON fs.faculty_id = f.id
+                JOIN users u ON f.username = u.username
+                WHERE fs.sub_id = ?
+                ORDER BY f.id ASC
+            ");
+            if ($fsStmt) {
+                $fsStmt->bind_param("i", $sub_id);
+                if ($fsStmt->execute()) {
+                    $fsRes = $fsStmt->get_result();
+                    $fList = [];
+                    while ($fsRow = $fsRes->fetch_assoc()) {
+                        if (!empty($fsRow['name'])) {
+                            $fList[] = trim($fsRow['name']);
+                        }
+                    }
+                    if (!empty($fList)) {
+                        $faculty = implode(', ', array_unique($fList));
+                    }
+                }
+                $fsStmt->close();
+            }
+        }
+        if (empty($faculty)) {
+            // Check diary entries for instructor who taught classes
+            $dStmt = $this->conn->prepare("
+                SELECT DISTINCT u.name 
+                FROM diary d
+                JOIN faculties f ON d.faculty_id = f.id
+                JOIN users u ON f.username = u.username
+                WHERE d.sub_id = ?
+                ORDER BY d.id DESC
+            ");
+            if ($dStmt) {
+                $dStmt->bind_param("i", $sub_id);
+                if ($dStmt->execute()) {
+                    $dRes = $dStmt->get_result();
+                    $dList = [];
+                    while ($dRow = $dRes->fetch_assoc()) {
+                        if (!empty($dRow['name'])) {
+                            $dList[] = trim($dRow['name']);
+                        }
+                    }
+                    if (!empty($dList)) {
+                        $faculty = implode(', ', array_unique($dList));
+                    }
+                }
+                $dStmt->close();
+            }
+        }
+        if (empty($faculty)) {
+            $faculty = 'N/A';
         }
 
         // Fetch Course Outcomes for Preamble
@@ -197,25 +313,97 @@ class EBluebookPDFService
             $coStmt->close();
         }
 
+        // Program & Branch
+        $progName = !empty($metaRow['prog_shortname']) ? trim($metaRow['prog_shortname']) : (!empty($metaRow['prog_fullname']) ? trim($metaRow['prog_fullname']) : '');
+        $specName = !empty($metaRow['spec_fullname']) ? trim($metaRow['spec_fullname']) : (!empty($metaRow['spec_shortname']) ? trim($metaRow['spec_shortname']) : '');
+        $specShort = !empty($metaRow['spec_shortname']) ? trim($metaRow['spec_shortname']) : '';
+        $class_full = !empty($metaRow['classname']) ? trim($metaRow['classname']) : ($details['data']['classname'] ?? '');
 
-        // Branch and Class parts
-        $class_parts = explode(' - ', $class_full);
-        $semester = trim($class_parts[2] ?? '');
-        preg_match_all('/\(([^)]+)\)/', $class_parts[0] ?? '', $matches);
-        $branch = '';
-        if (count($matches[1]) === 1) {
-            $branch = $matches[1][0];
-        } elseif (count($matches[1]) >= 2) {
-            $last = array_pop($matches[1]);
-            $secondLast = array_pop($matches[1]);
-            $branch = $secondLast . ' (' . $last . ')';
+        if (!empty($specName)) {
+            if (!empty($progName) && stripos($specName, $progName) === false) {
+                $branchFull = $progName . ' - ' . $specName;
+            } else {
+                $branchFull = $specName;
+            }
+
+            if (!empty($specShort)) {
+                if (!empty($progName) && stripos($specShort, $progName) === false) {
+                    $branchShort = $progName . ' (' . $specShort . ')';
+                } else {
+                    $branchShort = $specShort;
+                }
+            } else {
+                $branchShort = $branchFull;
+            }
+        } else {
+            $class_parts = explode(' - ', $class_full);
+            preg_match_all('/\(([^)]+)\)/', $class_parts[0] ?? '', $matches);
+            $branchExtracted = '';
+            if (count($matches[1]) === 1) {
+                $branchExtracted = $matches[1][0];
+            } elseif (count($matches[1]) >= 2) {
+                $last = array_pop($matches[1]);
+                $secondLast = array_pop($matches[1]);
+                $branchExtracted = $secondLast . ' (' . $last . ')';
+            }
+            $branchShort = !empty($branchExtracted) ? $branchExtracted : ($class_parts[0] ?? 'N/A');
+            $branchFull = $branchShort;
         }
 
-        $pos = strpos($class_parts[0] ?? '', '(');
-        $class = ($pos !== false) ? trim(substr($class_parts[0], 0, $pos)) : ($class_parts[0] ?? '');
-        if (isset($class_parts[1])) {
-            $class .= ' - ' . trim($class_parts[1]);
+        // Class & Semester
+        $yearsem = !empty($metaRow['yearsem']) ? trim($metaRow['yearsem']) : (!empty($details['data']['yearsem']) ? trim($details['data']['yearsem']) : '');
+        $section = !empty($metaRow['section']) ? trim($metaRow['section']) : (!empty($details['data']['section']) ? trim($details['data']['section']) : '');
+
+        if (!empty($yearsem)) {
+            if (strpos($yearsem, ' - ') !== false) {
+                $yParts = explode(' - ', $yearsem);
+                $yearPart = trim($yParts[0]);
+                $semPart = trim($yParts[1]);
+                $class = (!empty($progName) ? $progName . ' - ' : '') . $yearPart;
+                if (!empty($section)) {
+                    $class .= ' - Sec ' . $section;
+                }
+                $semester = $semPart;
+            } else {
+                $class = (!empty($progName) ? $progName : $class_full);
+                if (!empty($section)) {
+                    $class .= ' - Sec ' . $section;
+                }
+                $semester = $yearsem;
+            }
+        } else {
+            $class_parts = explode(' - ', $class_full);
+            $semester = trim($class_parts[2] ?? '');
+            $pos = strpos($class_parts[0] ?? '', '(');
+            $class = ($pos !== false) ? trim(substr($class_parts[0], 0, $pos)) : ($class_parts[0] ?? '');
+            if (isset($class_parts[1])) {
+                $class .= ' - ' . trim($class_parts[1]);
+            }
         }
+
+        // Instruction Period Date Resolution
+        if ((empty($start_date) || $start_date === 'N/A') && !empty($metaRow['class_start_date'])) {
+            $start_date = $metaRow['class_start_date'];
+        }
+        if ((empty($end_date) || $end_date === 'N/A') && !empty($metaRow['class_end_date'])) {
+            $end_date = $metaRow['class_end_date'];
+        }
+        if (empty($start_date) || empty($end_date)) {
+            $dtStmt = $this->conn->prepare("SELECT MIN(date) AS min_d, MAX(date) AS max_d FROM attendance WHERE sub_id = ?");
+            if ($dtStmt) {
+                $dtStmt->bind_param("i", $sub_id);
+                if ($dtStmt->execute()) {
+                    $dtRes = $dtStmt->get_result();
+                    if ($dtRow = $dtRes->fetch_assoc()) {
+                        if (empty($start_date) && !empty($dtRow['min_d'])) $start_date = $dtRow['min_d'];
+                        if (empty($end_date) && !empty($dtRow['max_d'])) $end_date = $dtRow['max_d'];
+                    }
+                }
+                $dtStmt->close();
+            }
+        }
+        $start_date_formatted = (!empty($start_date) && $start_date !== 'N/A') ? date('d-m-Y', strtotime($start_date)) : 'N/A';
+        $end_date_formatted = (!empty($end_date) && $end_date !== 'N/A') ? date('d-m-Y', strtotime($end_date)) : 'N/A';
 
         // Initialize mPDF
         $mpdf = new \Mpdf\Mpdf([
@@ -234,12 +422,18 @@ class EBluebookPDFService
             p { margin: 0 0 3px 0; }
         </style>');
 
+        $specFullName = !empty($metaRow['spec_fullname']) ? trim($metaRow['spec_fullname']) : '';
+        $className = !empty($metaRow['classname']) ? trim($metaRow['classname']) : ($details['data']['classname'] ?? '');
+
         $metaInfo = [
             'dept_name' => $deptName,
             'subject' => $subject,
             'subcode' => $subCode,
-            'branch' => $branch,
-            'class' => $class,
+            'spec_fullname' => $specFullName,
+            'classname' => $className,
+            'branch' => !empty($specFullName) ? $specFullName : $branchFull,
+            'branch_short' => $branchShort,
+            'class' => !empty($className) ? $className : $class,
             'semester' => $semester,
             'acad_year' => $acadYear,
             'course_type' => $courseType,
@@ -256,7 +450,8 @@ class EBluebookPDFService
         $mpdf->WriteHTML($coverHtml);
 
         // Header builder for subsequent operational pages
-        $getBluebookHeader = function($sectionTitle) use ($class, $semester, $branch, $acadYear, $start_date_formatted, $end_date_formatted, $subject, $subCode, $faculty) {
+        $getBluebookHeader = function($sectionTitle) use ($class, $semester, $branchShort, $acadYear, $start_date_formatted, $end_date_formatted, $subject, $subCode, $faculty) {
+            $branch = $branchShort;
             $subTitle = !empty($subCode) ? htmlspecialchars($subject) . ' (' . htmlspecialchars($subCode) . ')' : htmlspecialchars($subject);
             
             // Dynamically scale font size based on subject title length to guarantee single line fit
@@ -910,6 +1105,29 @@ class EBluebookPDFService
         $cleanDeptName = strtoupper(trim($cleanDeptName));
         $deptHeading = 'DEPARTMENT OF ' . htmlspecialchars($cleanDeptName, ENT_QUOTES, 'UTF-8');
 
+        // Class & Semester: display classname field only
+        $classSemDisplay = !empty($meta['classname']) ? trim($meta['classname']) : (!empty($meta['class']) ? trim($meta['class']) : 'N/A');
+
+        $pStart = $meta['start_date'] ?? 'N/A';
+        $pEnd = $meta['end_date'] ?? 'N/A';
+        if ($pStart !== 'N/A' && $pEnd !== 'N/A') {
+            $periodDisplay = $pStart . ' to ' . $pEnd;
+        } elseif ($pStart !== 'N/A') {
+            $periodDisplay = 'From ' . $pStart;
+        } elseif ($pEnd !== 'N/A') {
+            $periodDisplay = 'Up to ' . $pEnd;
+        } else {
+            $periodDisplay = 'N/A';
+        }
+
+        $subjectDisplay = !empty($meta['subject']) ? $meta['subject'] : 'N/A';
+        $subcodeDisplay = !empty($meta['subcode']) ? $meta['subcode'] : 'N/A';
+        // Program & Branch: display specfullname field only
+        $branchDisplay = !empty($meta['spec_fullname']) ? trim($meta['spec_fullname']) : (!empty($meta['branch']) ? trim($meta['branch']) : 'N/A');
+        $acadYearDisplay = !empty($meta['acad_year']) ? $meta['acad_year'] : 'N/A';
+        $courseTypeDisplay = !empty($meta['course_type']) ? $meta['course_type'] : 'Theory';
+        $facultyDisplay = !empty($meta['faculty']) ? $meta['faculty'] : 'N/A';
+
         $html = '<div style="font-family: Arial, sans-serif; text-align: center;">
             ' . $logoImg . '
             <h2 style="font-size: 16.5px; color: #1a365d; margin: 0 0 5px 0; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px;">
@@ -940,35 +1158,35 @@ class EBluebookPDFService
                 </tr>
                 <tr>
                     <td style="width: 28%; font-weight: bold; background-color: #fafafa; padding: 8px 12px;">Course Title:</td>
-                    <td style="width: 72%; font-weight: bold; color: #0d6efd; padding: 8px 12px;">' . htmlspecialchars($meta['subject']) . '</td>
+                    <td style="width: 72%; font-weight: bold; color: #0d6efd; padding: 8px 12px;">' . htmlspecialchars($subjectDisplay) . '</td>
                 </tr>
                 <tr>
                     <td style="font-weight: bold; background-color: #fafafa; padding: 8px 12px;">Course Code:</td>
-                    <td style="font-weight: bold; padding: 8px 12px;">' . htmlspecialchars($meta['subcode']) . '</td>
+                    <td style="font-weight: bold; padding: 8px 12px;">' . htmlspecialchars($subcodeDisplay) . '</td>
                 </tr>
                 <tr>
                     <td style="font-weight: bold; background-color: #fafafa; padding: 8px 12px;">Program &amp; Branch:</td>
-                    <td style="padding: 8px 12px;">' . htmlspecialchars($meta['branch']) . '</td>
+                    <td style="padding: 8px 12px;">' . htmlspecialchars($branchDisplay) . '</td>
                 </tr>
                 <tr>
                     <td style="font-weight: bold; background-color: #fafafa; padding: 8px 12px;">Class &amp; Semester:</td>
-                    <td style="padding: 8px 12px;">' . htmlspecialchars($meta['class']) . ' (' . htmlspecialchars($meta['semester']) . ')</td>
+                    <td style="padding: 8px 12px;">' . htmlspecialchars($classSemDisplay) . '</td>
                 </tr>
                 <tr>
                     <td style="font-weight: bold; background-color: #fafafa; padding: 8px 12px;">Academic Year:</td>
-                    <td style="padding: 8px 12px;">' . htmlspecialchars($meta['acad_year']) . '</td>
+                    <td style="padding: 8px 12px;">' . htmlspecialchars($acadYearDisplay) . '</td>
                 </tr>
                 <tr>
                     <td style="font-weight: bold; background-color: #fafafa; padding: 8px 12px;">Course Type:</td>
-                    <td style="padding: 8px 12px;">' . htmlspecialchars($meta['course_type']) . '</td>
+                    <td style="padding: 8px 12px;">' . htmlspecialchars($courseTypeDisplay) . '</td>
                 </tr>
                 <tr>
                     <td style="font-weight: bold; background-color: #fafafa; padding: 8px 12px;">Course Instructor:</td>
-                    <td style="font-weight: bold; padding: 8px 12px;">' . htmlspecialchars($meta['faculty']) . '</td>
+                    <td style="font-weight: bold; padding: 8px 12px;">' . htmlspecialchars($facultyDisplay) . '</td>
                 </tr>
                 <tr>
                     <td style="font-weight: bold; background-color: #fafafa; padding: 8px 12px;">Instruction Period:</td>
-                    <td style="padding: 8px 12px;">' . htmlspecialchars($meta['start_date']) . ' to ' . htmlspecialchars($meta['end_date']) . '</td>
+                    <td style="padding: 8px 12px;">' . htmlspecialchars($periodDisplay) . '</td>
                 </tr>
             </table>
 

@@ -46,23 +46,23 @@ Empty tables, especially for disabled modules, are evidence of unvalidated adopt
 
 **A1. Simulated attainment can appear as measured attainment.** `getBatchMacroAttainment()` calculates each PO's attained score as `target * 0.82`, then propagates that value to PEO/mission summaries. It is called by the batch dashboard and longitudinal analytics. Replace it with approved evidence-based calculations, or clearly mark it as a simulation and exclude it from official outputs. Missing evidence must yield “not available,” with coverage metadata, rather than a synthetic achievement.
 
-Evidence: [BatchOBEService.php:710](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/services/BatchOBEService.php:710).
+Evidence: [BatchOBEService.php](../jntuacea/services/BatchOBEService.php).
 
 **A2. A course file can imply approval when no audit exists.** The DAAC certificate renderer defaults missing faculty sign-off to `SUBMITTED` and HOD status to `APPROVED`, supplies a statement of verified 100% coverage, and prints an unconditional conformity finding. Require actual approval records, reviewer identity, timestamps and approved evidence. Until then, render a draft or pending page without certification language.
 
-Evidence: [CourseMasterFilePDFService.php:639](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/services/CourseMasterFilePDFService.php:639).
+Evidence: [CourseMasterFilePDFService.php](../jntuacea/services/CourseMasterFilePDFService.php).
 
 **A3. Attendance conclusions can disagree between portals.** Student risk calculations hardcode 75%/65%, count approved permissions as attended, and use a legacy joining-date fallback. The gazette loads configurable thresholds, also checks per-subject requirements, counts only `P` as attended and uses a different joining-date fallback. Establish one attendance calculation contract for permissions, joining dates, denominators, zero data, precision, subject applicability, and date cutoffs. Distinguish advisory risk from official eligibility explicitly.
 
-Evidence: [StudentAttendanceService.php:131](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuaceastudents/services/StudentAttendanceService.php:131), [academicsection.class.php:386](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/academicsection.class.php:386).
+Evidence: [StudentAttendanceService.php](../jntuaceastudents/services/StudentAttendanceService.php), [academicsection.class.php](../jntuacea/academicsection.class.php).
 
 **A4. Policy scope is weaker than the college model requires.** Settings are uniquely identified by regulation text and key, with fallback to R23. R20 settings span two regulation IDs; R21 has only the three newly added keys locally. Consequently, missing settings can silently inherit a different regulation. Explicitly approve which defaults may be inherited. Academic decisions should resolve program, regulation ID, course type, cohort and effective period, and record the policy version used. Preserve the college's real distinctions without building a general-purpose rules product.
 
-Evidence: [SettingsService.php:200](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/services/SettingsService.php:200), local settings metadata.
+Evidence: [SettingsService.php](../jntuacea/services/SettingsService.php), local settings metadata.
 
 **A5. Batch/program analysis needs department-specific context.** `computePOPSOArticulationMatrix()` derives a department from a program join using `LIMIT 1`; programs span specialisations/departments. It can load subjects across a batch while selecting outcomes for one inferred department. Accept explicit department/specialisation scope and test shared courses, sections and grouped subjects. Separate measured PO/PSO outcomes from PEO evidence; the college must approve which alumni/employer or other longitudinal evidence supports PEO assessment.
 
-Evidence: [BatchOBEService.php:796](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/services/BatchOBEService.php:796).
+Evidence: [BatchOBEService.php](../jntuacea/services/BatchOBEService.php).
 
 ### B. Permissions and workflow integrity
 
@@ -70,15 +70,15 @@ Evidence: [BatchOBEService.php:796](/Applications/XAMPP/xamppfiles/htdocs/classa
 
 Concrete paths needing attention include reconciliation accepting a posted subject ID without a visible faculty-mapping check, attendance deletion processing by request ID without a department predicate, and staff document downloads without a document-specific scope check. Some routes already check ownership correctly; standardise that pattern across all routes and exports.
 
-Evidence: [FeatureManager.php:274](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/services/FeatureManager.php:274), [faclessonplanreconciliation.php:29](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/faclessonplanreconciliation.php:29), [hod.class.php:1193](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/hod.class.php:1193), [viewdocument.php](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/viewdocument.php).
+Evidence: [FeatureManager.php](../jntuacea/services/FeatureManager.php), [faclessonplanreconciliation.php](../jntuacea/faclessonplanreconciliation.php), [hod.class.php](../jntuacea/hod.class.php), [viewdocument.php](../jntuacea/viewdocument.php).
 
 **B2. Correction approval is not one atomic operation.** Attendance request approval updates status before deleting diary and attendance rows, without one surrounding transaction or a pending-state predicate. The method can report success independently of downstream deletion. Add scoped authorization, CSRF validation at the controller, allowed transitions, concurrency protection, a single transaction and retained before/after evidence. The inspected deletion POST handler and reconciliation POST handler lack CSRF-token validation.
 
-Evidence: [hod.class.php:1193](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/hod.class.php:1193), [hodviewdelrequests.php:14](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/hodviewdelrequests.php:14).
+Evidence: [hod.class.php](../jntuacea/hod.class.php), [hodviewdelrequests.php](../jntuacea/hodviewdelrequests.php).
 
 **B3. Student login discards its verification error.** After Turnstile validation, `$err` is reset to an empty string before credential processing. Failed verification therefore does not prevent that processing. Preserve the verification result and unify session security, rate limiting and password-reset handling across both portals. Staff throttling is session-based; use a shared persistent control for reliable throttling. Replace predictable reset passwords with temporary credentials or reset tokens and forced change.
 
-Evidence: [student index.php:48](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuaceastudents/index.php:48).
+Evidence: [student index.php](../jntuaceastudents/index.php).
 
 **B4. Some new feature switches do not control their named workflow.** `MOD_ATTENDANCE_DELETE_REQUESTS` is registered but has no PHP reference; the existing flow uses `MOD_ATT_REQUESTS`. The DAAC variance and diary-lag setting keys are seeded but have no PHP consumers in the inspected code. Reconcile each module key with its menu, route, mutation guard, report and dependent features. Do not equate a registered switch with a complete feature.
 
@@ -86,17 +86,17 @@ Evidence: [student index.php:48](/Applications/XAMPP/xamppfiles/htdocs/classatte
 
 **C1. Rubric upsert and validation are incomplete.** Evaluation inserts use `ON DUPLICATE KEY UPDATE`, but the evaluation table has no unique key for mark/criterion. Repeated submissions can accumulate duplicate breakdowns. Establish stable criterion identity, validate each score and total server-side, authorise the selected subject/student and write the assessment plus breakdown atomically. Honour the rubric module's write permission as well as the CIA module's permission.
 
-Evidence: [facaddcialabmarks.php:88](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/facaddcialabmarks.php:88), migration and live indexes.
+Evidence: [facaddcialabmarks.php](../jntuacea/facaddcialabmarks.php), migration and live indexes.
 
 **C2. CQI is currently a proposal log, not a completed improvement cycle.** Faculty proposals and status display exist, but the inspected PHP has no mutation of HOD review status or completion/effectiveness capture. The table has index names beginning `fk_` but no actual foreign keys. Add a scoped review queue, revision path, action owner, due date, execution evidence, follow-up measurement and closure. Validate CO ownership and derive attainment figures from trusted calculations rather than posted fields. A proposed action is not an action taken.
 
 **C3. Results need an explicit authority and attempt model.** The result importer defaults missing credits to 3, grade conversion is hardcoded, and SEE sync sets maximum marks to 70 and picks the latest imported matching result across notifications. Approve rules for regular/supplementary attempts, revaluation, withheld/absent results, approved publication, corrected results and course-specific maxima. Use staging, validation and controlled publication. Documentation's grade mapping differs from the service mapping; resolve it against actual college regulations before release.
 
-Evidence: [ExamResultsService.php:277](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/services/ExamResultsService.php:277), [ExamResultsService.php:322](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/services/ExamResultsService.php:322).
+Evidence: [ExamResultsService.php](../jntuacea/services/ExamResultsService.php).
 
 **C4. Timetable conflict checks are commented out in the management route.** The insert service does not replace those checks. Confirm required exceptions for groups/co-teaching and enforce classroom, faculty and student-group overlap rules with effective dates.
 
-Evidence: [hodmanage_timetable.php:47](/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea/hodmanage_timetable.php:47).
+Evidence: [hodmanage_timetable.php](../jntuacea/hodmanage_timetable.php).
 
 **C5. Operational standards differ across portals.** Credentials, authentication, FeatureManager, profile and results services have separate implementations. Some differences are appropriate read/write boundaries; common rules need one versioned implementation. Staff creates separate connections per object and does not set `utf8mb4` in its connection constructor; student code shares a connection and sets the charset. Shared document rows resolve files by trying two application-local upload folders, contradicting fully independent deployment. Certificate numbering uses `COUNT + 1`, which races under concurrent requests. Audit calls also mix faculty-record IDs and user IDs, requiring a stable actor convention. Composer permits PHP 7.4 although the code uses PHP 8 features; no first-party automated test suite, CI configuration or Composer lockfile was found in the inspected source.
 

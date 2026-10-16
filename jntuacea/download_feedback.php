@@ -17,6 +17,11 @@ if (!isset($_GET['subid'])) {
 }
 
 $subid = intval($_GET['subid']);
+try {
+    $db->assertSubjectScope($subid);
+} catch (\DomainException $e) {
+    \College\RequestSecurity::deny($e->getMessage());
+}
 
 $metaRows = []; // Initialize as empty, default (if facid missing)
 

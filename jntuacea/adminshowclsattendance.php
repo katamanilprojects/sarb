@@ -23,6 +23,9 @@ $selected_sub_id = null;
 $selected_cls_id = null;
 $attendanceData = null;
 $diaryEntries = null;
+$showDateRange = false;
+$start_date = null;
+$end_date = null;
 
 if (!empty($_POST['dept_id'])) {
     $selected_dept_id = $_POST['dept_id'];

@@ -29,29 +29,32 @@ foreach ($resultsData['results'] as $row) {
                 'release_date' => $row['release_date'],
                 'yearsem' => $row['yearsem'],
                 'academic_year' => $row['academic_year'],
-                'regulation' => $row['regulation']
+                'regulation' => $row['regulation'],
+                'exam_type' => $row['exam_type']
             ],
             'items' => [],
             'reg_credits' => 0.0,
             'earned_credits' => 0.0,
-            'weighted_points' => 0.0
+            'weighted_points' => 0.0,
+            'complete' => true
         ];
     }
     $grouped[$notifId]['items'][] = $row;
     $reg = (float)$row['credits_registered'];
     $earned = (float)$row['credits_earned'];
-    $pts = (float)$row['grade_points'];
+    $pts = $row['result_status'] === 'PASS' ? (float)$row['grade_points'] : 0.0;
 
     $grouped[$notifId]['reg_credits'] += $reg;
     $grouped[$notifId]['earned_credits'] += $earned;
     $grouped[$notifId]['weighted_points'] += ($reg * $pts);
+    if ($row['result_status'] === 'WITHHELD' || $row['grade_points'] === null) { $grouped[$notifId]['complete'] = false; }
 }
 
 // Calculate SGPA for each notification
 foreach ($grouped as $k => $grp) {
-    $grouped[$k]['sgpa'] = ($grp['reg_credits'] > 0) 
+    $grouped[$k]['sgpa'] = ($grp['complete'] && $grp['reg_credits'] > 0)
         ? round($grp['weighted_points'] / $grp['reg_credits'], 2) 
-        : 0.00;
+        : null;
 }
 ?>
 
@@ -106,11 +109,12 @@ foreach ($grouped as $k => $grp) {
                         </h6>
                         <span class="badge bg-secondary me-1">Regulation: <?= htmlspecialchars($exam['info']['regulation']) ?></span>
                         <span class="badge bg-info text-dark me-1">Sem: <?= htmlspecialchars($exam['info']['yearsem']) ?></span>
+                        <span class="badge bg-light text-dark border"><?= htmlspecialchars($exam['info']['exam_type']); ?></span>
                         <span class="badge bg-light text-dark border">Exam Date: <?= htmlspecialchars($exam['info']['month_year']) ?></span>
                     </div>
                     <div class="text-end">
                         <span class="text-muted small d-block">Published: <?= date('d M Y', strtotime($exam['info']['release_date'])) ?></span>
-                        <span class="badge bg-success fs-6 mt-1">SGPA: <?= number_format($exam['sgpa'], 2) ?></span>
+                        <span class="badge bg-success fs-6 mt-1"><?= $exam['info']['exam_type'] === 'REGULAR' ? 'SGPA' : 'Attempt GPA'; ?>: <?= $exam['sgpa'] === null ? 'Pending' : number_format($exam['sgpa'], 2) ?></span>
                     </div>
                 </div>
 
@@ -161,7 +165,7 @@ foreach ($grouped as $k => $grp) {
                                 <tr>
                                     <td colspan="8" class="text-end">Summary for Semester:</td>
                                     <td class="text-center">Earned: <?= number_format($exam['earned_credits'], 1) ?> / <?= number_format($exam['reg_credits'], 1) ?></td>
-                                    <td class="text-center text-success">SGPA: <?= number_format($exam['sgpa'], 2) ?></td>
+                                    <td class="text-center text-success"><?= $exam['info']['exam_type'] === 'REGULAR' ? 'SGPA' : 'Attempt GPA'; ?>: <?= $exam['sgpa'] === null ? 'Pending' : number_format($exam['sgpa'], 2) ?></td>
                                 </tr>
                             </tfoot>
                         </table>

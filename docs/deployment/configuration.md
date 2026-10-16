@@ -1,138 +1,148 @@
 # Installation & Configuration Guide
 
-This guide details the technical requirements, environment setup, database installation, and file system permissions necessary to run the application.
+This guide details the technical requirements, unified repository layout, environment setup, private document storage, database initialization, CLI tools, and file system permissions necessary to run the application.
 
 ---
 
 ## 1. System Requirements
 
-- **PHP**: Version 7.4 or 8.0+ (requires extensions: `mysqli`, `session`, `json`, `mbstring`, `curl`, `openssl`).
-- **Web Server**: Apache 2.4+ (mod_rewrite enabled, `.htaccess` override allowed).
-- **Database**: MariaDB 10.4+ or MySQL 5.7+ / 8.0+ (`utf8mb4` character set).
-- **Hosting Stack**: Tested on standard XAMPP / LAMP / WAMP environments.
+- **PHP**: Version 8.0+ / 8.3+ (requires extensions: `mysqli`, `session`, `json`, `mbstring`, `curl`, `openssl`, `gd`, `zip`).
+- **Web Server**: Apache 2.4+ (`mod_rewrite` enabled, `.htaccess` `AllowOverride All` enabled).
+- **Database**: MariaDB 10.4+ or MySQL 8.0+ (`utf8mb4` character set).
+- **Hosting Stack**: Tested on macOS MAMP, XAMPP, and Linux LAMP environments.
 
 ---
 
-## 2. Directory Layout & Standalone Application Architecture
+## 2. Directory Layout & Unified Application Architecture
 
-The system consists of two independent, decoupled web applications communicating with the shared MariaDB database:
-1. **`jntuacea`**: Faculty, HOD, Academic Section, Admin, and Superadmin Portal.
-2. **`jntuaceastudents`**: Student Self-Service Portal (Profiles, Vault, Results, Certificates).
+The repository consists of two decoupled web portals (`jntuacea/` and `jntuaceastudents/`) sharing a synchronized 22-file Trusted Core (`core/`), a 90-table MariaDB/MySQL database (`database/`), CLI maintenance tools (`tools/`), and automated verification suites (`tests/`):
 
-On development / shared environments:
 ```text
-/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/
-├── .env.php                  <-- Shared environment configuration file (or placed locally)
-├── jntuacea/                 <-- Staff / Admin Application (Independent)
+/Applications/MAMP/htdocs/classattendance.in/
+├── .env.example              <-- Environment configuration template
+├── .env.php                  <-- Shared environment configuration file (git-ignored)
+├── .htaccess                 <-- Root Apache access hardening rules
+├── FACULTY_USER_MANUAL.md    <-- Complete 25-feature Faculty Operations Manual
+├── database/
+│   ├── baselines/            <-- Baseline schema verification files
+│   ├── dumps/                <-- Complete 90-table SQL schema dump
+│   ├── migrations/           <-- Active & archived replay-safe SQL migrations
+│   └── seeds/                <-- Foundation seed data
+├── docs/                     <-- Technical, database, workflow & deployment documentation
+├── jntuacea/                 <-- Staff, Faculty, HOD, Academic Section, Admin & SuperAdmin Portal
 │   ├── index.php
 │   ├── dbcredentials.class.php
-│   ├── services/
-│   │   ├── FeatureManager.php
-│   │   ├── ExamResultsService.php
-│   │   ├── StudentProfileService.php
-│   │   ├── BatchOBEService.php
-│   │   ├── CourseMasterFilePDFService.php
-│   │   ├── StudentAttendanceService.php
-│   │   └── EBluebookPDFService.php
+│   ├── core/                 <-- 22 Shared Trusted Core classes (namespace College)
+│   ├── services/             <-- 21 Domain, PDF, Excel, Attainment, Review & AI services
+│   ├── views/                <-- Modular UI view templates
+│   ├── logs/                 <-- Daily activity and error logs (Apache-denied)
+│   └── uploads/              <-- Attachments & legacy student docs (Apache-hardened)
+├── jntuaceastudents/         <-- Student Self-Service Portal
+│   ├── index.php
+│   ├── dbcredentials.class.php
+│   ├── core/                 <-- Synchronized copy of 22 Shared Trusted Core classes
+│   ├── services/             <-- Student-scoped domain services
+│   ├── logs/                 <-- Daily activity and error logs (Apache-denied)
 │   └── uploads/
-└── jntuaceastudents/         <-- Student Portal Application (Independent)
-    ├── index.php
-    ├── dbcredentials.class.php
-    ├── services/
-    │   ├── FeatureManager.php
-    │   ├── ExamResultsService.php
-    │   └── StudentProfileService.php
-    └── uploads/
+├── tests/                    <-- Reproducible workflow, core, attainment, AI & migration tests
+└── tools/                    <-- CLI tools (migrate.php, baseline.php, sync_core.php, prepare_results_test.php, ai_worker.php, etc.)
 ```
 
-On production servers, each application can be deployed to its own independent document root or subdomain (e.g., `jntuacea.classattendance.in` and `jntuaceastudents.classattendance.in`) with zero cross-application filesystem dependencies.
+On production servers, each portal can be deployed to its own document root or subdomain (e.g., `jntuacea.classattendance.in` and `jntuaceastudents.classattendance.in`) after synchronizing shared core files via `php tools/sync_core.php`.
 
 ---
 
 ## 3. Environment Configuration (`.env.php`)
 
-> [!IMPORTANT]
-> The database connection class (`DBCredentials` in `dbcredentials.class.php`) in both applications dynamically looks for `.env.php` first in its own application root (`__DIR__ . '/.env.php'`) and falls back to the parent directory (`dirname(__DIR__) . '/.env.php'`).
-> ```php
-> if (!defined('DB_HOST')) {
->     if (file_exists(__DIR__ . '/.env.php')) {
->         require_once __DIR__ . '/.env.php';
->     } elseif (file_exists(dirname(__DIR__) . '/.env.php')) {
->         require_once dirname(__DIR__) . '/.env.php';
->     }
-> }
-> ```
+Copy `.env.example` to `.env.php` in the repository root:
+```bash
+cp .env.example .env.php
+```
 
-Create or verify the `.env.php` file:
+> [!IMPORTANT]
+> `DBCredentials` (`dbcredentials.class.php`) and `\College\Connection` (`core/Connection.php`) resolve `.env.php` first in the portal directory (`__DIR__ . '/.env.php'`) and fall back to the repository root (`dirname(__DIR__) . '/.env.php'`).
+
+Configure `.env.php`:
 
 ```php
 <?php
-// .env.php (Placed in parent directory of jntuacea)
-define('DB_HOST', 'localhost');
-define('DB_USER', 'u182589698_jntuaceasarb');
-define('DB_PASS', 'YourStrongPasswordHere');
-define('DB_NAME', 'u182589698_jntuaceasarb');
+// Database Configuration (e.g., MAMP default port 8889 or standard 3306)
+defined('DB_HOST') || define('DB_HOST', 'localhost:8889');
+defined('DB_USER') || define('DB_USER', 'u182589698_jntuaceasarb');
+defined('DB_PASS') || define('DB_PASS', 'YourStrongPasswordHere');
+defined('DB_NAME') || define('DB_NAME', 'u182589698_jntuaceasarb');
+
+// Private Student Document Repository (MUST reside outside the web document root)
+defined('COLLEGE_DOCUMENT_ROOT') || define('COLLEGE_DOCUMENT_ROOT', '/var/lib/jntuacea/private_documents');
+
+// Optional Cloudflare Turnstile CAPTCHA Secret
+defined('TURNSTILE_SECRET') || define('TURNSTILE_SECRET', '');
 ```
 
 ---
 
-## 4. Database Setup & Initialization
+## 4. Database Setup, Migrations & CLI Tools
 
-1. Create the database in MariaDB / MySQL:
+1. **Create the Database**:
    ```sql
-   CREATE DATABASE `u182589698_jntuaceasarb` 
-   CHARACTER SET utf8mb4 
+   CREATE DATABASE `u182589698_jntuaceasarb`
+   CHARACTER SET utf8mb4
    COLLATE utf8mb4_general_ci;
    ```
 
-2. Initialize database schema:
-   ```bash
-   mysql -u u182589698_jntuaceasarb -p u182589698_jntuaceasarb < schema_backup.sql
-   ```
+2. **Initialize or Upgrade the Schema**:
+   - **Fresh Local Schema Import**:
+     ```bash
+     mysql -u root -p u182589698_jntuaceasarb < database/dumps/u182589698_jntuaceasarb_local_db_scheme_.sql
+     ```
+   - **Upgrading an Existing Production Server Baseline**:
+     Follow the step-by-step instructions in [production-migration-2026-10-14.md](./production-migration-2026-10-14.md) using `database/migrations/archive/migration_production_complete_20261014.sql`.
+   - **CLI Migration & Baseline Runner (`tools/`)**:
+     ```bash
+     php tools/migrate.php
+     php tools/baseline.php
+     php tools/sync_core.php --check
+     ```
 
-3. Verify that all 77 tables across 11 functional domains and constraints are loaded successfully:
+3. **Verify Schema Completeness**:
+   Confirm that all **90 tables** (821 columns across 12 functional domains) are present:
    ```sql
    USE u182589698_jntuaceasarb;
    SHOW TABLES;
    ```
-   *(A reference template is available in `dbcredentials.class.php.example`)*
 
 ---
 
-## 5. File System Permissions
+## 5. File System & Private Document Storage Permissions
 
-The application requires write access for logging and file attachments:
+1. **Private Document Vault (`COLLEGE_DOCUMENT_ROOT`)**:
+   Student document uploads (`\College\DocumentStorage`) are stored outside the web document root and streamed via `viewdocument.php`:
+   ```bash
+   mkdir -p /var/lib/jntuacea/private_documents/student_docs
+   chmod -R 770 /var/lib/jntuacea/private_documents
+   ```
 
-```bash
-# Ensure web server (www-data, daemon, or _www on macOS) has write access:
-chmod -R 775 logs/
-chmod -R 775 uploads/
-
-# Ensure subdirectories exist inside uploads/
-mkdir -p uploads/cia_attachments
-mkdir -p uploads/syllabus
-mkdir -p uploads/student_docs
-mkdir -p uploads/results_csv
-chmod -R 775 uploads/cia_attachments
-chmod -R 775 uploads/syllabus
-chmod -R 775 uploads/student_docs
-chmod -R 775 uploads/results_csv
-```
+2. **Portal Log & Attachment Directories**:
+   ```bash
+   chmod -R 775 jntuacea/logs/ jntuaceastudents/logs/
+   mkdir -p jntuacea/uploads/cia_attachments jntuacea/uploads/syllabus jntuacea/uploads/student_docs jntuacea/uploads/results_csv
+   chmod -R 775 jntuacea/uploads/ jntuaceastudents/uploads/
+   ```
 
 ---
 
 ## 6. Web Server Configuration
 
-### Apache VirtualHost or Directory
-Ensure `AllowOverride All` is set so that `.htaccess` rules (session settings and headers) are applied:
+Ensure `AllowOverride All` is enabled on the repository root so `.htaccess` rules protect `.env*`, `*.sql`, `database/`, `tools/`, `tests/`, `core/`, `logs/`, and `uploads/student_docs/`:
 
 ```apache
-<Directory "/Applications/XAMPP/xamppfiles/htdocs/classattendance.in/jntuacea">
-    Options Indexes FollowSymLinks
+<Directory "/Applications/MAMP/htdocs/classattendance.in">
+    Options FollowSymLinks
     AllowOverride All
     Require all granted
 </Directory>
 ```
 
 ### Verification
-Open `http://localhost/classattendance.in/jntuacea/` in your web browser. You should be greeted with the JNTUACEA Attendance System login portal.
+- Staff / Admin Portal: `http://localhost:8888/classattendance.in/jntuacea/` (or port `80` depending on MAMP/Apache configuration)
+- Student Portal: `http://localhost:8888/classattendance.in/jntuaceastudents/`

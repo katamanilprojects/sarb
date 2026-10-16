@@ -40,10 +40,11 @@ class ExamResultsService extends \DBCredentials
                 FROM exam_notifications en
                 LEFT JOIN programs p ON en.program_id = p.id
                 LEFT JOIN regulations r ON en.regulation_id = r.id
-                WHERE 1=1";
+                WHERE en.is_published=1 AND en.workflow_status='PUBLISHED'
+                  AND EXISTS(SELECT 1 FROM exam_results own WHERE own.notification_id=en.id AND own.htno=?)";
 
-        $params = [];
-        $types = "";
+        $params = [strtoupper(trim((string)($_SESSION['user'] ?? '')))];
+        $types = 's';
 
         if ($programId !== null && $programId > 0) {
             $sql .= " AND en.program_id = ?";
@@ -85,9 +86,11 @@ class ExamResultsService extends \DBCredentials
             FROM exam_notifications en
             LEFT JOIN programs p ON en.program_id = p.id
             LEFT JOIN regulations r ON en.regulation_id = r.id
-            WHERE en.id = ? LIMIT 1
+            WHERE en.id = ? AND en.is_published=1 AND en.workflow_status='PUBLISHED'
+              AND EXISTS(SELECT 1 FROM exam_results own WHERE own.notification_id=en.id AND own.htno=?) LIMIT 1
         ");
-        $stmt->bind_param("i", $id);
+        $roll = strtoupper(trim((string)($_SESSION['user'] ?? '')));
+        $stmt->bind_param("is", $id, $roll);
         $stmt->execute();
         return $stmt->get_result()->fetch_assoc() ?: null;
     }
@@ -98,101 +101,40 @@ class ExamResultsService extends \DBCredentials
      */
     public function getStudentResults(string $htno, ?int $notificationId = null): array
     {
-        $htno = strtoupper(trim($htno));
-        if (strcasecmp($htno,$_SESSION['user']??'')!==0) { throw new \DomainException('Only your own results may be viewed.'); }
-        $sql = "
-            SELECT er.*, en.title AS notification_title, en.month_year, en.release_date,
-                   en.yearsem, en.academic_year, r.regulation
-            FROM exam_results er
-            JOIN exam_notifications en ON er.notification_id = en.id
-            JOIN regulations r ON en.regulation_id = r.id
-            WHERE er.htno = ? AND en.is_published = 1
-        ";
-        $params = [$htno];
-        $types = "s";
-
-        if ($notificationId !== null && $notificationId > 0) {
-            $sql .= " AND er.notification_id = ?";
-            $params[] = $notificationId;
-            $types .= "i";
-        }
-
-        $sql .= " ORDER BY en.release_date DESC, er.subject_code ASC";
-
-        $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param($types, ...$params);
-        $stmt->execute();
-        $res = $stmt->get_result();
-
-        $results = [];
-        $totalCreditsRegistered = 0.0;
-        $totalCreditsEarned = 0.0;
-        $totalWeightedPoints = 0.0;
-
-        while ($row = $res->fetch_assoc()) {
-            $results[] = $row;
-            $credits = (float)$row['credits_registered'];
-            $earned = (float)$row['credits_earned'];
-            $points = (float)$row['grade_points'];
-
-            $totalCreditsRegistered += $credits;
-            $totalCreditsEarned += $earned;
-            $totalWeightedPoints += ($credits * $points);
-        }
-
-        $sgpa = ($totalCreditsRegistered > 0) ? round($totalWeightedPoints / $totalCreditsRegistered, 2) : 0.00;
-
-        return [
-            'htno' => $htno,
-            'results' => $results,
-            'total_registered' => $totalCreditsRegistered,
-            'total_earned' => $totalCreditsEarned,
-            'sgpa' => $sgpa
-        ];
+        if (strcasecmp($htno, $_SESSION['user'] ?? '') !== 0) { throw new \DomainException('Only your own results may be viewed.'); }
+        require_once __DIR__ . '/../core/PublishedResults.php';
+        return (new \College\PublishedResults($this->conn))->forStudent($htno, $notificationId);
     }
 
     /**
-     * Map letter grades to standard 10-point grade scale points.
+     * Resolve grade points from the exact course regulation; no global grade scale.
      */
-    public function getGradePoints(string $grade): int
+    public function getGradePoints(string $grade, ?int $subjectId = null): float
     {
-        return match(strtoupper(trim($grade))) {
-            'O', 'S' => 10,
-            'A+', 'EX' => 9,
-            'A' => 8,
-            'B+' => 7,
-            'B' => 6,
-            'C' => 5,
-            'D', 'P' => 4,
+        if (!$subjectId) { throw new \DomainException('Select the exact course offering to resolve its regulation grade points.'); }
+        $this->assertSubjectScope($subjectId);
+        require_once __DIR__ . '/../core/ResultsPolicy.php';
+        $profile = (new \College\ResultsPolicy($this->conn))->forSubject($subjectId);
+        foreach ($profile['config']['grade_bands'] as $band) {
+            if (strcasecmp($grade, $band['grade']) === 0) { return (float)$band['points']; }
+        }
+        if (in_array(strtoupper($grade), ['AB','MP','WH','W'], true)) { return 0.0; }
+        throw new \DomainException('Grade is not configured for this regulation.');
+    }
+
+
     /**
      * Fetch published result for a student in a specific subject.
      */
     public function getStudentSubjectResult(string $htno, int $subjectId, ?string $subcode = null): ?array
     {
-        $htno = strtoupper(trim($htno));
-        if (strcasecmp($htno, $_SESSION['user'] ?? '') !== 0) {
-            throw new \DomainException('Only your own results may be viewed.');
-        }
-        $code = strtoupper(trim((string)$subcode));
-        $sql = "
-            SELECT er.*, en.title AS notification_title, en.month_year, en.release_date,
-                   en.yearsem, en.academic_year, r.regulation
-            FROM exam_results er
-            JOIN exam_notifications en ON er.notification_id = en.id
-            JOIN regulations r ON en.regulation_id = r.id
-            WHERE UPPER(TRIM(er.htno)) = ?
-              AND (er.subject_id = ? OR UPPER(TRIM(er.subject_code)) = ?)
-              AND en.is_published = 1
-            ORDER BY en.release_date DESC, er.id DESC
-            LIMIT 1
-        ";
-        $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param("sis", $htno, $subjectId, $code);
-        $stmt->execute();
-        $res = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        return $res ?: null;
+        if (strcasecmp($htno, $_SESSION['user'] ?? '') !== 0) { throw new \DomainException('Only your own results may be viewed.'); }
+        $this->assertSubjectScope($subjectId);
+        require_once __DIR__ . '/../core/PublishedResults.php';
+        $rows = (new \College\PublishedResults($this->conn))->forStudent($htno, null, $subjectId)['results'];
+        return $rows[0] ?? null;
     }
+
 }
 
 // Global class alias

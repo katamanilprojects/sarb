@@ -25,6 +25,8 @@ require_once("stheader.php");
 
 // Fetch classes and their corresponding subjects for the student
 $subjects = $assessmentService->getSubjectsByStudentId($_POST['student_id']);
+$studentClassStatus = $studentRepo->getStudentClassStatus((int)$_POST['student_id'], (int)$_POST['class_id']);
+$isInactiveInClass = ($studentClassStatus === 0);
 
 $isResultsPub = \FeatureManager::isStudentVisible('MOD_RESULTS_PUBLISH');
 $resultsMap = [];
@@ -34,9 +36,9 @@ if ($isResultsPub) {
     $studentResults = $examSvc->getStudentResults((string)$_SESSION['user']);
     foreach ($studentResults['results'] ?? [] as $resRow) {
         if (!empty($resRow['subject_id'])) {
-            $resultsMap[(int)$resRow['subject_id']] = $resRow;
+            $resultsMap[(int)$resRow['subject_id']] ??= $resRow;
         }
-        $resultsMap[strtoupper(trim((string)$resRow['subject_code']))] = $resRow;
+
     }
 }
 ?>
@@ -45,7 +47,12 @@ if ($isResultsPub) {
     <div class="card shadow-lg">
         <div class="card-header">
             <div class="float-start">
-                <h6 class="mb-0"><?= htmlspecialchars($_POST['classname']); ?></h6>
+                <h6 class="mb-0">
+                    <?= htmlspecialchars($_POST['classname']); ?>
+                    <?php if ($isInactiveInClass): ?>
+                        <span class="badge bg-secondary ms-2">Inactive / Transferred</span>
+                    <?php endif; ?>
+                </h6>
                 <small>Academic Year: <?= htmlspecialchars($_POST['acad_year']); ?></small>
             </div>
             <div class="float-end">
@@ -53,6 +60,11 @@ if ($isResultsPub) {
             </div>
         </div>
         <div class="card-body">
+            <?php if ($isInactiveInClass): ?>
+                <div class="alert alert-secondary py-2 mb-3">
+                    <i class="bi bi-info-circle me-1"></i><strong>Notice:</strong> You are currently marked inactive in this class (e.g. transferred or shifted mid-semester). You may click any course below to review past attendance records earned during your active period.
+                </div>
+            <?php endif; ?>
             <?php if (!empty($subjects)): ?>
                 <table class="table table-bordered table-striped align-middle">
                     <thead>
@@ -67,7 +79,7 @@ if ($isResultsPub) {
                     </thead>
                     <tbody>
                         <?php foreach ($subjects as $subject): 
-                            $sRes = $resultsMap[(int)$subject['id']] ?? $resultsMap[strtoupper(trim((string)$subject['subcode']))] ?? null;
+                            $sRes = $resultsMap[(int)$subject['id']] ?? null;
                         ?>
                             <tr class="clickable-row" onclick="document.getElementById('subject_form_<?= htmlspecialchars($subject['id'], ENT_QUOTES, 'UTF-8'); ?>').submit();">
                                 <td><span class="badge bg-light text-dark border font-monospace"><?= htmlspecialchars($subject['subcode']); ?></span></td>
@@ -91,7 +103,7 @@ if ($isResultsPub) {
                                     </td>
                                 <?php endif; ?>
                             </tr>
-                            <form id="subject_form_<?= htmlspecialchars($subject['id'], ENT_QUOTES, 'UTF-8'); ?>" action="studentsubatt.php" method="post" style="display: none;">
+                            <form id="subject_form_<?= htmlspecialchars($subject['id'], ENT_QUOTES, 'UTF-8'); ?>" action="studentcourseatt.php" method="post" style="display: none;">
                                 <input type="hidden" name="subject_id" value="<?= htmlspecialchars($subject['id'], ENT_QUOTES, 'UTF-8'); ?>">
                                 <input type="hidden" name="subcode" value="<?= htmlspecialchars($subject['subcode'], ENT_QUOTES, 'UTF-8'); ?>">
                                 <input type="hidden" name="sub_fullname" value="<?= htmlspecialchars($subject['sub_fullname'], ENT_QUOTES, 'UTF-8'); ?>">

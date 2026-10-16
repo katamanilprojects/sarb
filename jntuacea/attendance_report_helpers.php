@@ -30,7 +30,7 @@ if (!function_exists('attendance_report_bootstrap')) {
         $end_date = !empty($_POST['end_date']) ? $_POST['end_date'] : null;
         $reg_id = 0;
 
-        $data['studentList'] = $hodObj->getStudentsByClass($selected_cls_id);
+        $data['studentList'] = $hodObj->getStudentsByClass($selected_cls_id, true);
         $data['subjectList'] = $hodObj->getSubjectsByClassID($selected_cls_id);
 
         if (!empty($data['subjectList']['status']) && $data['subjectList']['status'] == 1) {
@@ -46,14 +46,15 @@ if (!function_exists('attendance_report_bootstrap')) {
                     $reg_id = (int) $data['details']['data']['reg_id'];
                 }
 
-                $temp_attendanceData = $hodObj->getDetailedAttendanceBySubjectExcludingPermissions($selected_sub_id, $start_date, $end_date);
+                $temp_attendanceData = $hodObj->getDetailedAttendanceBySubjectExcludingPermissions($selected_sub_id, $start_date, $end_date, true);
                 $data['subject_max_classes'][$subject['subcode']] = 0;
 
                 foreach (($temp_attendanceData['data'] ?? []) as $student) {
                     $data['attendanceData'][$student['username']][$subject['subject_sno']] = [
                         'tot_cls' => $student['total_classes'],
                         'tot_pre' => $student['total_present'],
-                        'percentage' => (float) $student['percentage']
+                        'percentage' => (float) $student['percentage'],
+                        'student_status' => (int) ($student['student_status'] ?? 1)
                     ];
 
                     if ($data['sub_sno_tot_cls'][$subject['subject_sno']] < $student['total_classes']) {

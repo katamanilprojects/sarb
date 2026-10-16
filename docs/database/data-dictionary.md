@@ -64,15 +64,15 @@ Most master tables include a `status` integer flag used for soft-deactivation:
 Integer value ranging from `1` through `7`, corresponding to the periods configured in `class_timings` for that date.
 
 ### 3.3 Attendance Deletion Status (`attendance_delete_requests.status`)
-- `'pending'`: Awaiting review by the Department HOD.
-- `'approved'`: Approved by HOD; matching records in `attendance` and `diary` have been purged.
-- `'rejected'`: Rejected by HOD with comments recorded in `hod_remarks`.
+- `'Pending'`: Awaiting review by the Department HOD.
+- `'Approved'`: Approved by HOD; matching records in `attendance` and `diary` are purged after saving a before/after snapshot in `academic_record_snapshots` and transition history in `workflow_review_history`.
+- `'Rejected'`: Rejected by HOD with decision remarks recorded in `workflow_review_history` and `audit_logs`.
 
 ---
 
 ## 4. Assessment Component Types (`assessment_components.component_type`)
 
-ENUM values defining the structure of internal assessments:
+ENUM values defining the structure of internal (CIA) and external (SEE) assessments:
 
 | Component Type | Description |
 |---|---|
@@ -86,6 +86,10 @@ ENUM values defining the structure of internal assessments:
 | `Subjective-2` | Mid-Term 2 descriptive test component. |
 | `Objective-2` | Mid-Term 2 objective test component. |
 | `Activity` | Co-curricular, seminar, or mini-project assessment activity. |
+| `SEE-Theory` | Semester End Examination (SEE) standard theory question paper blueprint. |
+| `SEE-Split-A` | Semester End Examination composite split course Part-A blueprint. |
+| `SEE-Split-B` | Semester End Examination composite split course Part-B blueprint. |
+| `SEE-Lab` | Semester End Examination practical/laboratory question blueprint. |
 
 ---
 
@@ -230,26 +234,27 @@ Different degree levels and subject types store marks in dedicated specialized c
 
 ---
 
-## 11. Semester End Examination (SEE) Evaluation
+## 11. Semester End Examination (SEE) & External Attainment Evaluation
 
 ### 11.1 SEE Entry Modes (`external_assessment_marks.entry_mode`)
-- `DETAILED`: Mode A. Itemized question paper entry (compulsory Question 1 covering all COs + resolved either/or choices across Units 1 to 5). Supports direct question-level CO attainment.
-- `DIRECT`: Mode B. Ledger entry of consolidated university marks out of maximum marks (typically 70 or 35). Direct attainment calculated proportionately across all course outcomes.
-- `SYNCED`: Mode C. Synchronized automatically from official published exam results roster.
+- `DETAILED`: Mode A. Itemized question paper entry (compulsory questions + resolved either/or `choice_groups` across units) stored in `student_marks` and consolidated into `external_assessment_marks`.
+- `DIRECT`: Mode B / Mode C / Independent Import. Consolidated external marks ledger entry, auto-synced published result score, or external CSV import.
 
 ### 11.2 SEE Evidence Basis (`external_assessment_marks.evidence_basis`)
-- `DETAILED_QP`: Question-wise marks entered per question (Q1 + Q2–Q9) mapped directly to designated Course Outcomes.
-- `METADATA_DISTRIBUTION`: SEE Question Paper metadata uploaded (`see_question_paper_questions`). Marks distributed across COs based on question weights $\frac{\text{Marks}(CO)}{\text{TotalQP}}$.
-- `DIRECT_SCALE`: Faculty direct entry of consolidated university marks scaled across all COs.
-- `RESULT_SCALE`: Synced from published examination results roster (raw external marks or regulation grade band midpoint), distributed across all COs.
+Stored as `varchar(60)` describing the exact provenance and calculation basis:
+- `LEGACY`: Pre-standardisation consolidated external marks.
+- `DETAILED_QP`: Question-wise marks entered per question (`assessment_questions`, `student_marks`) with single-selection choice attribution (`choice_groups`) and equal sharing (`EQUAL_SHARE`) across multi-CO questions.
+- `DIRECT_ENTRY`: Faculty direct entry of consolidated university marks via `SeeMarksWriter`.
+- `PUBLISHED_RESULT_SYNC:Grade=<G>;Status=<S>`: Synced from a published `exam_notifications` roster (`source_notification_id`) with numeric external marks.
+- `IMPORT_DIRECT` / `IMPORT_SCALED`: Committed via `attainmentimport.php` (`attainment_import_batches`, `source_batch_id`), retaining raw gross marks (`raw_marks`, `raw_max_marks`) and scaled net marks.
+- `GRADE_ESTIMATE:<Grade>:<Policy>`: Grade-only external evidence converted via configured regulation/subject `grade_bands` (`midpoint`, `lower`, or `upper` policy). Reported separately under `estimated_students` rather than `measured_students`.
 
-### 11.3 3-Tier SEE Attainment Distribution Strategy
-As SEE completes the direct attainment cycle, the calculation engine implements three hierarchical tiers:
-1. **Tier 1 (Detailed Question-wise Marks)**: When faculty enter itemized marks per question, each score maps directly to its mapped CO.
-2. **Tier 2 (QP Metadata Distribution)**: When question paper structure metadata is defined, external scores are distributed in proportion to question CO weights.
-3. **Tier 3 (Published Results & Grade Band Midpoint)**: When only published exam results are available:
-   - If raw external marks exist: scaled to net max marks (70.0 UG) across all COs.
-   - If only letter grade/points exist: resolved via regulation grade band midpoint $(\text{Min\%} + \text{Max\%})/2$ from `regulations.grade_bands_json` across all COs.
+### 11.3 Multi-Mode Individual Attainment Strategy (`\College\AttainmentCalculator`)
+Each enrolled student's SEE evidence is evaluated individually (never forcing the first student's mode onto the rest of the cohort):
+1. **Measured Question-Wise Evidence (`DETAILED`)**: Selected compulsory and choice-group questions feed both the student's total and per-CO attainment (`measured_students`).
+2. **Measured Aggregate Evidence (`DIRECT` / `IMPORT_DIRECT` / `IMPORT_SCALED` / `PUBLISHED_RESULT_SYNC`)**: Numeric external score compared against the CO target threshold across mapped COs (`measured_students`).
+3. **Estimated Grade-Band Evidence (`GRADE_ESTIMATE`)**: Grade-derived score evaluated separately (`estimated_students`), never conflated with measured CO scores.
+4. **Missing Coverage & Provisional Flag**: Blank scores or unimported enrolled students are counted in `missing_students`, marking the attainment output as `provisional = true`.
 
 ## 12. Autonomous Academic Settings Engine & Statutory Framework
 
@@ -347,55 +352,50 @@ $$C = L + T + 0.5 \times \max(P, PR)$$
 
 ---
 
-## 14. Feature Toggle Engine (`system_feature_modules`)
+## 14. Feature Toggle & Granular RBAC Engine (`system_feature_modules` & `role_module_permissions`)
 
 ### 14.1 Grounded Feature Modules
-The 27 system feature keys correspond strictly to verified functional modules:
+The **28 system feature keys** in `system_feature_modules` correspond strictly to verified functional modules (`MOD_ATTENDANCE_DELETE_REQUESTS` is normalized at runtime to `MOD_ATT_REQUESTS`):
 - `MOD_ATTENDANCE`: Daily Period Attendance Marking & Verification.
-- `MOD_ATT_REQUESTS`: Multi-step Attendance Deletion & Correction Requests.
+- `MOD_ATT_REQUESTS`: Multi-step Attendance Deletion & Correction Requests (normalizes `MOD_ATTENDANCE_DELETE_REQUESTS`).
 - `MOD_CLASS_DIARY`: Classroom Teaching Diary & Topic Delivery Tracking.
 - `MOD_CIA_MARKS`: Continuous Internal Assessment (Mid-1, Mid-2, Lab, PG, Project) Marks Entry.
 - `MOD_CIA_METADATA`: CIA Assessment Components, Question-to-CO Mapping & File Attachments.
 - `MOD_CO_PO`: Course Outcomes (CO1-CO6) Definition & CO-PO/PSO Articulation Matrix.
 - `MOD_OBE_ANALYSIS`: Direct/Indirect Attainment Calculations & 14-page e-Bluebook Export.
 - `MOD_LESSON_PLAN`: Unit-wise Lecture Plans & End-of-Course Delivery Reconciliation.
-- `MOD_SEE_MARKS`: Semester End Examination (SEE) University Marks Entry.
+- `MOD_SEE_MARKS`: Semester End Examination (SEE) University Marks Entry & Attainment Import.
 - `MOD_FEEDBACK`: Student Feedback Surveys (Faculty Appraisal, CO Survey, Course End Survey).
 - `MOD_GROUPED_ATT`: Grouped / Multi-Class Elective Attendance Marking.
 - `MOD_BATCH_GOVERNANCE`: Batch-Centric Governance, Vision/Mission, PEOs & Macro-Attainment.
 - `MOD_RESULTS_PUBLISH`: Examination Results Publication & SEE Marks Auto-Sync.
 - `MOD_STUDENT_PROFILE`: Comprehensive Student Biographical Profile & Document Vault.
-- `MOD_CERTIFICATES`: Statutory Certificate Generation & Custody Movement Ledger.
+- `MOD_CERTIFICATES`: Statutory Certificate Generation & Custody Movement Ledger (depends on `MOD_STUDENT_PROFILE`).
 - `MOD_SAR_FORM_C3`: NBA SAR Form C-3 Standalone Attainment & Gap Analysis PDF Export.
-- `MOD_COURSE_MASTER_FILE`: Autonomous Course Master File Accreditation Dossier (7-section PDF).
-- `MOD_ATTENDANCE_CONDONATION_GAZETTE`: Regulatory Attendance Condonation & Detention Gazette.
+- `MOD_COURSE_MASTER_FILE`: Autonomous Course Master File Accreditation Dossier (7-section PDF; depends on `MOD_LESSON_PLAN`).
+- `MOD_ATTENDANCE_CONDONATION_GAZETTE`: Regulatory Attendance Condonation & Detention Gazette (depends on `MOD_ATTENDANCE`).
 - `MOD_BLOOM_ANALYSIS`: Real-time Bloom HOTS (L4–L6) vs LOTS (L1–L3) Cognitive Advisory Meter.
 - `MOD_PO_PSO_ATTAINMENT`: PO/PSO Program Articulation Matrix (NBA Tables 3.2 & 3.3.2 with CES).
-- `MOD_LAB_RUBRICS`: Continuous Laboratory Evaluation Rubrics Engine (Hybrid & Editable).
-- `MOD_ATTENDANCE_DELETE_REQUESTS`: Single-Tier HOD Attendance Deletion Governance with Audit Trail.
-- `MOD_STUDENT_ATTENDANCE_RISK`: Student Portal Attendance Risk Gauge (Safe Margin & Recovery Hours).
-- `MOD_CQI_ACTION_TRACKING`: Continuous Quality Improvement (CQI) Remedial Action Plan Tracker.
-- `MOD_CERTIFICATE_QR`: Cryptographic QR Credential Verification (SHA-256 Public Verification).
+- `MOD_LAB_RUBRICS`: Continuous Laboratory Evaluation Rubrics Engine (depends on `MOD_CIA_MARKS`).
+- `MOD_ATTENDANCE_DELETE_REQUESTS`: Legacy alias key normalized to `MOD_ATT_REQUESTS`.
+- `MOD_STUDENT_ATTENDANCE_RISK`: Student Portal Attendance Risk Gauge (depends on `MOD_ATTENDANCE`).
+- `MOD_CQI_ACTION_TRACKING`: Continuous Quality Improvement (CQI) Remedial Action Plan Tracker (depends on `MOD_CO_PO` and `MOD_OBE_ANALYSIS`).
+- `MOD_CERTIFICATE_QR`: Opaque Token Public Credential Verification (depends on `MOD_CERTIFICATES`).
 - `MOD_BATCH_OBE`: Multi-Batch Longitudinal OBE Analytics & Cohort Trajectory Radar Charts.
 - `MOD_CREDIT_PROMOTION`: Autonomous Credit-Based Promotion Pipeline Simulation (R23 Sec 18).
+- `MOD_AI_ASSISTANCE`: Optional AI Assistance for opt-in, human-reviewed CO attainment and ATR drafts (depends on `MOD_SEE_MARKS`; disabled by default).
 
 ### 14.2 Module Categories (`system_feature_modules.category`)
 - `ATTENDANCE`: Attendance marking, grouped attendance, diary, deletion requests, condonation gazette.
-- `CIA`: Continuous internal assessments, question paper Bloom's taxonomy, lab rubrics.
+- `CIA`: Continuous internal assessments, assessment metadata, question paper Bloom's taxonomy, lab rubrics.
 - `OBE`: Batch governance, PEO-Mission mapping, CO-PO articulation, attainment analytics, SAR Form C-3, CQI actions, multi-batch trends.
 - `ACCREDITATION`: Autonomous Course Master File, compliance audits, syllabus verification.
 - `EXAMINATION`: Official examination results publication, SEE marks ledger, credit promotion simulation.
-- `STUDENTS`: Comprehensive student biographical profile and document vault.
-- `STUDENT_PORTAL`: Student dashboard attendance risk gauges, internal marks reflections.
-- `ADMINISTRATION`: Statutory certificate generation, physical document custody tracking.
-- `GENERAL`: Cryptographic QR verification, institutional settings, system security.
-- `CURRICULUM`: Unit-wise lesson planning, course structures, and reconciliation.
+- `STUDENTS` / `PROFILE` / `STUDENT_PORTAL`: Student biographical profiles, document vault, and student dashboard attendance risk gauges.
+- `ADMINISTRATION`: Statutory certificate generation and physical document custody tracking.
+- `CURRICULUM`: Unit-wise lesson planning, course structures, and syllabus reconciliation.
 - `FEEDBACK`: Faculty appraisal, Course Outcome feedback, and Course End Surveys.
-- `PROFILE`: Student biographical profiles, entrance exam ranks, digital document vault.
-- `ADMINISTRATION`: Custodial certificate movement, TC, Bonafide, Study/Conduct certificates.
-- `CIA`: Internal assessment marks, assessment metadata, question paper rubrics.
-- `CURRICULUM`: Lesson plans, end-of-course syllabus reconciliation audits.
-- `FEEDBACK`: Multi-tier feedback surveys, CES ratings, faculty appraisals.
+- `GENERAL`: Public certificate verification, optional AI assistance, and institutional settings.
 
 ### 14.3 Role Visibility Enum States
 - **Faculty / HOD Visibility (`faculty_visibility`, `hod_visibility`)**:
@@ -405,6 +405,13 @@ The 27 system feature keys correspond strictly to verified functional modules:
 - **Student Visibility (`student_visibility`)**:
   - `VISIBLE`: Feature is accessible in the student portal (`jntuaceastudents/`).
   - `HIDDEN`: Feature and associated menu links are completely suppressed in the student portal.
+
+### 14.4 Granular Role-Module Action Permissions (`role_module_permissions.action`)
+SuperAdmin can allow or deny individual operations per role (`faculty`, `hod`, `admin`, `academic_section`, `student`) and module:
+- `view`: Read/view module pages and dashboards.
+- `edit`: Create or modify records within the module.
+- `approve`: Execute review/approval transitions (e.g., HOD audit/CQI/deletion reviews).
+- `export`: Generate and download PDF/Excel/CSV reports and dossiers.
 
 ---
 
@@ -497,13 +504,14 @@ Where $C_i$ represents registered credits for course $i$, and $G_i$ represents n
 
 ---
 
-## 18. Accreditation Rubrics, CQI Remedial Actions & QR Verification
+## 18. Accreditation Rubrics, CQI Remedial Actions & Certificate Verification
 
 ### 18.1 Laboratory Assessment Tripartite Criteria Standard
-For 15-mark continuous lab evaluation under `MOD_LAB_RUBRICS`:
+For 15-mark continuous lab evaluation under `MOD_LAB_RUBRICS` (`Services\LabAssessmentService`):
 - **Conduction & Execution** (Max 5.00M): Experimental setup, circuit wiring, procedure execution, and laboratory safety compliance.
 - **Observation & Record** (Max 5.00M): Accurate reading observation, calculation precision, graph plotting, and timely record book submission.
 - **Viva Voce & Conceptual Understanding** (Max 5.00M): Oral inquiry into principles, apparatus functions, troubleshooting, and theoretical domain understanding.
+- Uniqueness invariant: `(uglab_mark_id, criterion_name)` (`uq_lab_evaluation`).
 
 ### 18.2 CQI Remedial Action Types (`course_cqi_actions.action_type`)
 - `REMEDIAL_CLASS`: Additional remedial lectures arranged for struggling students.
@@ -512,15 +520,14 @@ For 15-mark continuous lab evaluation under `MOD_LAB_RUBRICS`:
 - `ASSIGNMENT_REVISION`: Redesign of assignments to target specific Course Outcome weaknesses.
 - `CONTENT_BEYOND_SYLLABUS`: Guest lectures, workshops, or industry seminars to bridge curricular gaps.
 
-### 18.3 CQI Review Lifecycle (`course_cqi_actions.hod_review_status`)
-- `PENDING`: Action plan submitted by Course Faculty, awaiting HOD / PAC review.
-- `APPROVED`: Formally endorsed by Department Head for implementation in subsequent academic session.
-- `REVISION_REQUESTED`: Returned to instructor with HOD directions for strengthening the proposed intervention.
+### 18.3 CQI Review & Closure Lifecycle (`course_cqi_actions` & `reviewqueue.php`)
+- `PENDING`: Action plan submitted by Course Faculty, awaiting HOD review.
+- `REVISION_REQUESTED`: Returned to instructor with `hod_remarks` for strengthening the proposed intervention; faculty submits `REVISED` proposal to re-enter `PENDING`.
+- `APPROVED`: Endorsed by HOD (`reviewed_by`, `reviewed_at`). Faculty subsequently records `execution_evidence` and `completed_at` (`COMPLETED`), after which the HOD records `followup_measure` and closes the action (`closed_by`, `closed_at`).
 
-### 18.4 Cryptographic Verification Token Architecture
-Statutory certificates and custodial receipts encode a tamper-evident SHA-256 validation token:
-$$\text{Signature Token} = \text{hash}\Big(\text{"sha256"}, \text{certificate\_no} \mathbin{\Vert} \text{roll\_no}\Big)$$
-Scanned via public URL `viewcertificate.php?cert_no=<NO>&token=<HASH>`. Matches verified against `student_certificate_requests` and `student_custodial_records`.
+### 18.4 Opaque Certificate Verification Token Architecture (`student_certificate_requests.verification_token`)
+- Upon approval/generation, statutory certificates are assigned a concurrency-safe number via `certificate_sequences` (`\College\CertificateNumber::next()`) and an opaque 64-character CSPRNG token (`bin2hex(random_bytes(32))`) stored in `student_certificate_requests.verification_token` (`uq_certificate_verification_token`).
+- Public verification via `viewcertificate.php?id=<REQ_ID>&token=<TOKEN>` (`StudentProfileService::verifyCertificateByToken()`) validates the opaque token in constant time and returns limited credential verification metadata (masking roll number on unauthenticated public lookup while requiring authenticated `RecordScope` ownership for full certificate rendering). External QR services are not contacted.
 
 ### 18.5 Autonomous Credit Promotion Rules (R23 Section 18)
 Advisory simulation evaluated by `ExamResultsService::evaluateCreditPromotionSimulation()`:
@@ -528,3 +535,37 @@ Advisory simulation evaluated by `ExamResultsService::evaluateCreditPromotionSim
 - **Year 2 &rarr; Year 3**: Minimum 40% of credits earned in Year 1 (Semesters I & II).
 - **Year 3 &rarr; Year 4**: Minimum 40% of credits earned across Years 1 & 2 (Semesters I through IV).
 - **Committee Override**: Academic Committee may clear flagged students with auditable override logged to `audit_logs` as `CLEARED BY COMMITTEE`.
+
+---
+
+## 19. Exam Notification Workflow, Report Snapshots & Optional AI Queue States
+
+### 19.1 Exam Notification Workflow & Types (`exam_notifications`)
+- **`workflow_status`**:
+  - `DRAFT`: Notification created or draft CSV imported; not yet verified or visible to students.
+  - `REVIEWED`: Imported results verified by reviewer (`reviewed_by`, `reviewed_at`); ready for publication.
+  - `PUBLISHED`: Officially published (`is_published = 1`); visible in student grade cards and eligible for SEE auto-sync (published imports are locked against overwrite).
+- **`exam_type`**:
+  - `REGULAR`: Standard end-semester examination session.
+  - `SUPPLEMENTARY`: Backlog/supplementary examination session.
+  - `REVALUATION`: Revaluation/recounting result notification.
+
+### 19.2 Report Snapshot States (`report_snapshots.state`)
+- `DRAFT`: Snapshot captured during report generation (`cqi_atr`, `external_co_attainment`).
+- `REVIEWED`: Snapshot verified by faculty/HOD reviewer.
+- `PUBLISHED`: Snapshot finalized for institutional accreditation records.
+
+### 19.3 Optional AI Provider & Job States (`ai_providers` & `ai_jobs`)
+- **Provider Kinds (`ai_providers.kind`)**:
+  - `OLLAMA`: Local or private-network Ollama Chat API endpoint (`/api/chat`).
+  - `OPENAI_COMPATIBLE`: Public HTTPS OpenAI-compatible Chat Completions endpoint (`/v1/chat/completions`) authenticated via a dedicated `CEA_AI_...` environment variable in the CLI worker.
+- **AI Task Keys (`ai_job_consents.task_key`, `ai_jobs.task_key`)**:
+  - `CO_ATTAINMENT_ANALYSIS`: Evidence-grounded narrative draft summarizing external CO attainment metrics.
+  - `ATR_ACTION_PROPOSAL`: Evidence-linked remedial action proposals for unattained Course Outcomes.
+- **AI Job Lifecycle (`ai_jobs.status`)**:
+  - `QUEUED`: Explicitly queued by an opted-in user from a reviewed snapshot.
+  - `RUNNING`: Claimed by bounded CLI worker (`php tools/ai_worker.php`) with a `claim_token` lease.
+  - `DRAFT`: Validated JSON response received (citing supplied evidence IDs with zero ungrounded numbers), awaiting human review.
+  - `APPROVED`: Reviewed and approved by an authorized department reviewer (`reviewed_by`, `reviewed_at`, `review_remarks`). Approval never mutates marks, attendance, or recorded CQI execution.
+  - `FAILED`: Failed after up to 3 attempts or due to provider config change.
+  - `CANCELLED`: Cancelled by user or automatically upon consent revocation (`ai_job_consents.is_enabled = 0`).

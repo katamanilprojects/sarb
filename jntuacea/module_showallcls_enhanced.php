@@ -69,11 +69,14 @@ $subjectBuckets = attendance_rule_buckets($subjectRules);
                     <?php foreach ($studentList as $student) {
                         $rollNumber = $student['roll_number'];
                         $studentName = $student['name'];
+                        $isInactive = (isset($student['status']) && (int)$student['status'] === 0);
+                        $inactiveBadge = $isInactive ? ' <span class="badge bg-secondary ms-1">Inactive</span>' : '';
+                        $rollBucketLabel = $isInactive ? $rollNumber . ' (Inactive)' : $rollNumber;
                         $tot_cls = 0;
                         $tot_pre = 0;
                         echo '<tr>';
                         echo '<td>' . e($rollNumber) . '</td>';
-                        echo '<td>' . e($studentName) . '</td>';
+                        echo '<td>' . e($studentName) . $inactiveBadge . '</td>';
 
                         foreach ($sub_sno_array as $sno) {
                             if (isset($attendanceData[$rollNumber][$sno])) {
@@ -94,7 +97,7 @@ $subjectBuckets = attendance_rule_buckets($subjectRules);
 
                         foreach ($overallRules as $rule) {
                             if ($attendanceRulesObj->evaluateRule((float) $overallPercentage, $rule)) {
-                                $overallBuckets[$rule['id']]['students'][] = $rollNumber;
+                                $overallBuckets[$rule['id']]['students'][] = $rollBucketLabel;
                             }
                         }
 
@@ -108,7 +111,7 @@ $subjectBuckets = attendance_rule_buckets($subjectRules);
                                     if (!isset($subjectBuckets[$rule['id']]['subjects'][$sno])) {
                                         $subjectBuckets[$rule['id']]['subjects'][$sno] = [];
                                     }
-                                    $subjectBuckets[$rule['id']]['subjects'][$sno][] = $rollNumber;
+                                    $subjectBuckets[$rule['id']]['subjects'][$sno][] = $rollBucketLabel;
                                 }
                             }
                         }

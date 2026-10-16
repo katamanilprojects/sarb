@@ -6,9 +6,9 @@ require_once __DIR__ . '/services/FeatureManager.php';
 \FeatureManager::requireAccess('MOD_CIA_METADATA');
 
 if (!empty($_GET['sub_id']) && !empty($_GET['assessment_number'])) {
-    $sub_id = $_GET['sub_id'];
-    $assessmentNumber = $_GET['assessment_number'];
-    $action_self = "facciaattachments.php?sub_id=" . $_GET['sub_id'] . "&assessment_number=" . $_GET['assessment_number'];
+    $sub_id = (int)$_GET['sub_id'];
+    $assessmentNumber = (int)$_GET['assessment_number'];
+    $action_self = "facciaattachments.php?sub_id=" . $sub_id . "&assessment_number=" . $assessmentNumber;
 } else {
     header('Location: facciamarks.php');
     exit();
@@ -24,8 +24,8 @@ $ciaObj = new CIA();
 if (!empty($_POST['sub_id']) && !empty($_POST['assessment_number']) && !empty($_POST['secretcode']) && $_POST['secretcode'] == $_SESSION['secretcode']) {
     \FeatureManager::requireWriteAccess('MOD_CIA_METADATA');
     unset($_SESSION['secretcode']);
-    $sub_id = $_POST['sub_id'];
-    $assessmentNumber = $_POST['assessment_number'];
+    $sub_id = (int)$_POST['sub_id'];
+    $assessmentNumber = (int)$_POST['assessment_number'];
 
     if (!empty($_FILES['attachment']) && !empty($_POST["file_title"])) {
         $file = $_FILES['attachment'];
@@ -33,19 +33,22 @@ if (!empty($_POST['sub_id']) && !empty($_POST['assessment_number']) && !empty($_
         $fileTmpName = $file['tmp_name'];
         $fileSize = $file['size'];
         $fileError = $file['error'];
+        $existing = $facultyObj->getCIAAttachments($sub_id, $assessmentNumber);
+        $attachmentCount = (int)($existing['count'] ?? 0);
 
         $allowedTypes = ['xlsx', 'xls', 'pdf', 'docx', 'doc', 'jpg', 'png', 'csv'];
         $maxSize = 20971520;
 
-        if (in_array(strtolower(pathinfo($file["name"], PATHINFO_EXTENSION)), $allowedTypes) && $fileSize <= $maxSize) {
+        if ($fileError === UPLOAD_ERR_OK && $attachmentCount < 5 && in_array(strtolower(pathinfo($file["name"], PATHINFO_EXTENSION)), $allowedTypes, true) && $fileSize > 0 && $fileSize <= $maxSize) {
             $targetDir = 'uploads/';
-            $fileName = 'cia_' . date('dmYHis') . '_' . $_POST['sub_id'] . '.' . pathinfo($file['name'], PATHINFO_EXTENSION);
+            $fileName = 'cia_' . bin2hex(random_bytes(24)) . '.' . strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
             $targetFile = $targetDir . $fileName;
             if (move_uploaded_file($fileTmpName, $targetFile)) {
                 $res = $facultyObj->addCIAAttachment($sub_id, $assessmentNumber, $_POST["file_title"], $targetFile);
                 if (!empty($res["status"]) && $res["status"] == 1) {
                     $succ = "File Upload and Saved Successfully";
                 } else {
+                    if (is_file($targetFile)) { unlink($targetFile); }
                     $err = "File Not Saved. Please try again";
                 }
             } else {
@@ -93,9 +96,9 @@ $_SESSION['secretcode'] = bin2hex(random_bytes(32));
                     echo '<tr><td>S.No.</td><td>Title</td><td>Download</td><td>Delete</td></tr>';
                     $sno = 1;
                     $attachments_count = 0;
-                    foreach ($attachments["files"] as $attachment) {
+                    foreach (($attachments["files"] ?? []) as $attachment) {
                         $delBtnAttr = $isReadOnly ? 'disabled' : '';
-                        echo '<tr><td>' . $sno . '</td><td>' . $attachment['file_title'] . '</td><td><a href="' . $attachment['file_path'] . '" target="_blank" download class="btn btn-sm btn-primary">Download</a></td><td>';
+                        echo '<tr><td>' . $sno . '</td><td>' . htmlspecialchars($attachment['file_title'], ENT_QUOTES, 'UTF-8') . '</td><td><a href="' . ('download_attachment.php?id=' . (int)$attachment['id']) . '" target="_blank" download class="btn btn-sm btn-primary">Download</a></td><td>';
                         echo '<form action="' . $action_self . '" method="post" onsubmit=\'return confirm("Are you sure you want to delete the Attachment ? ");\'>
                         <input type="hidden" name="id" value="' . $attachment['id'] . '">
                         <input type="hidden" name="sub_id" value="' . $sub_id . '">
@@ -136,7 +139,7 @@ $_SESSION['secretcode'] = bin2hex(random_bytes(32));
         </div>
     </div>
     <br>
-    <button id="showaddnewdiv" class="btn btn-success" <?php if ((!empty($attachments_count) && $attachments_count > 5) || \FeatureManager::isFacultyReadOnly('MOD_CIA_METADATA')) {
+    <button id="showaddnewdiv" class="btn btn-success" <?php if ((!empty($attachments_count) && $attachments_count >= 5) || \FeatureManager::isFacultyReadOnly('MOD_CIA_METADATA')) {
                                                             echo 'disabled';
                                                         } ?>>Add New Attachment</button>
     <?php if (!empty($succ)) echo '<br><div class="alert alert-success">' . $succ . '</div>'; ?>

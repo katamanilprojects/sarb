@@ -1,115 +1,158 @@
 # System Architecture Overview
 
-This document describes the architectural layout, runtime environment, authentication mechanisms, and logging infrastructure of the JNTUACEA Class Attendance & CIA Marks Management System.
+This document describes the architectural layout, runtime environment, shared trusted core, authentication & request security mechanisms, and forensic logging infrastructure of the JNTUACEA Class Attendance, CIA Marks, OBE & Institutional Governance System (`classattendance.in`).
 
 ---
 
-## 1. Technical Stack
+## 1. Technical Stack & Unified Repository Layout
 
-- **Runtime**: PHP 7.4+ / PHP 8.x
-- **Web Server**: Apache 2.4+ (typically hosted via XAMPP / LAMP stack)
-- **Database**: MariaDB 10.4+ / MySQL 5.7+ (`utf8mb4` charset)
-- **Frontend**: Server-rendered HTML5, Bootstrap, jQuery, DataTables, FontAwesome, Chart.js
-- **Configuration Mechanism**: PHP constant definitions in parent directory `.env.php`
+- **Runtime**: PHP 8.0+ / PHP 8.3 (strict types enabled across core and service modules)
+- **Web Server**: Apache 2.4+ (hosted via MAMP / XAMPP / LAMP stack with `.htaccess` hardening)
+- **Database**: MariaDB 10.4+ / MySQL 8.0+ (`utf8mb4` charset, 90 tables across 12 domains)
+- **Frontend**: Server-rendered HTML5, Bootstrap 4/5, jQuery, DataTables, FontAwesome, Bootstrap Icons, Chart.js
+- **PDF & Spreadsheet Engines**: TCPDF (`services/*PDFService.php`), FPDI, mPDF, PhpSpreadsheet (`services/FeedbackExcelService.php`)
+- **Configuration Mechanism**: PHP constant definitions in root `.env.php` (templated via `.env.example`)
+
+### Unified Repository Structure
+```text
+classattendance.in/
+├── .env.example              # Environment configuration template
+├── .env.php                  # Local/production environment credentials (git-ignored)
+├── .htaccess                 # Root Apache access hardening rules
+├── FACULTY_USER_MANUAL.md    # 25-feature step-by-step Faculty Operations Manual
+├── database/                 # Schema dumps, baselines, seeds, and migrations
+│   ├── baselines/
+│   ├── dumps/
+│   ├── migrations/
+│   │   └── archive/          # Consolidated and historical SQL migrations
+│   └── seeds/
+├── docs/                     # Complete technical, database, workflow & deployment docs
+├── jntuacea/                 # Staff, Faculty, HOD, Academic Section, Admin & SuperAdmin Portal
+│   ├── core/                 # 22 Shared Trusted Core classes (namespace College)
+│   ├── services/             # 21 Enterprise domain & PDF/Excel/AI service classes
+│   ├── views/                # Modular UI view partials
+│   └── *.class.php / *.php   # Domain models and page controllers
+├── jntuaceastudents/         # Student Self-Service Portal
+│   ├── core/                 # Synchronized copy of 22 Shared Trusted Core classes
+│   ├── services/             # Student-scoped domain services
+│   └── *.class.php / *.php   # Student models and page controllers
+├── tests/                    # Automated workflow, core, attainment, AI & migration test suites
+└── tools/                    # CLI maintenance, migration, core-sync, reconciliation & AI worker scripts
+```
 
 ---
 
 ## 2. Architectural Pattern
 
-The application follows a **Hybrid Page-Controller / Domain-Service** architectural pattern:
+The application follows a **Layered Page-Controller / Domain-Service / Shared Trusted Core** architectural pattern:
 
-1. **Page Controllers (`*.php`)**:
-   - Serve as entry points for specific URL requests (e.g., `facaddattendance.php`, `adminenrollstudents.php`, `hodmanage_timetable.php`).
-   - Manage request parsing, session verification, authorization guards, and HTML rendering.
-   - Include shared layout fragments (`header.php`, `menu.php`, `footer.php`).
+1. **Page Controllers (`jntuacea/*.php` & `jntuaceastudents/*.php`)**:
+   - Serve as entry points for HTTP requests (e.g., `facaddattendance.php`, `adminenrollstudents.php`, `hodmanage_timetable.php`, `attainmentimport.php`, `reviewqueue.php`, `aiassistance.php`).
+   - Manage request parsing, session verification, `FeatureManager` module/action guards, and HTML rendering.
+   - Include role-specific layout fragments (`header.php`, `facmenu.php` / `hodmenu.php` / `adminmenu.php` / `academicsectionmenu.php` / `superadminmenu.php` / `studentmenu.php`, `footer.php`).
 
-2. **Domain Service Models (`*.class.php` & `services/`)**:
-   - Encapsulate all database operations, business logic, transaction handling, and validations.
-   - Core administrative models: `User`, `Admin`, `Faculty`, `HOD`, `AcademicSection`, `SuperAdmin`.
-   - Course and offering models: `Subject` (offerings, elective groups, batch divisions), `CurriculumSubject` (master catalog).
-   - Assessment & OBE models: `CIA`, `CIAMarks`, `AssessmentStructure`, `COAttainment`, `CourseOutcome`, `SEEAssessment`, `LearningAnalytics`, `Timetable`, `AttendanceRules`, `FacCIAAnalysis2`.
-   - Enterprise accreditation & governance services:
-     - `FeatureManager`: Dynamic 27-module system gatekeeper, role-override enforcer, and category manager.
-     - `BatchOBEService`: Full multi-year cohort OBE hierarchy (Vision/Mission &rarr; PEOs &rarr; POs/PSOs &rarr; Macro-Attainment), PO/PSO Articulation Matrix (Tables 3.2 & 3.3.2), and longitudinal multi-batch quality analytics.
-     - `ExamResultsService`: Autonomous notification publisher, CSV parser, UGC 10-point scale engine, SEE marks auto-synchronizer, and advisory credit promotion simulation (R23 Section 18).
-     - `StudentProfileService`: Student biographical dossier, Cloud Document Vault, original certificates custody ledger, statutory certificate generator, and cryptographic SHA-256 QR verification.
-     - `CourseMasterFilePDFService`: Autonomous Course Master File 7-section master accreditation dossier generator.
-     - `StudentAttendanceService`: Real-time student attendance transparency and risk gauge analytics (Safe Margin & Recovery Periods).
-   - Dedicated reporting & policy services: `SettingsService` (autonomous policy rules), `LessonPlanService` (lecture delivery and reconciliation), `EBluebookPDFService` (accreditation Bluebook generation - strictly immune), `OBEAnalysisPDFService` (NBA attainment reports & SAR Form C-3), `EnhancedPDFService`, and `FeedbackExcelService`.
-   - Return structured associative arrays indicating status and payloads (e.g., `['status' => 1, 'data' => ...]`).
+2. **Shared Trusted Core (`jntuacea/core/` & `jntuaceastudents/core/` — `namespace College`)**:
+   - Twenty-two strict-typed foundational classes synchronized across both portals via `php tools/sync_core.php` and verified by `core/release.json`:
+     - **Infrastructure & Security**: `Connection` (single shared `mysqli` connection per request), `Clock` (`Asia/Kolkata` institutional time), `DateRange` (parameter-bound `YYYY-MM-DD` date range validation), `RequestSecurity` (automatic CSRF token injection/verification, same-origin checks, and resource scope guards), `RecordScope` (ownership assertions for subjects, classes, students, documents, certificates, and curriculum).
+     - **Attendance Engine**: `AttendanceCalculator` (unrounded regulatory standing classification), `AttendanceService` (unified attendance counting with joining-date, mapped-subject, permission, and missing-period checks), `AttendanceCorrection` (atomic 7-day student status corrections and row-locked HOD deletion reviews with before/after snapshots).
+     - **Assessment, Results & Attainment Engine**: `AssessmentPolicy` (exact regulation ID policy lookup and SHA-256 policy versioning), `MarksNormalizer` (gross-to-net scaling, choice-group evaluation, and grade-band midpoint conversion), `AttainmentCalculator` (choice-aware, equal-share multi-CO direct attainment with separate measured, estimated, and missing student counts), `ResultsPolicy` (course-specific assessment and grade-band resolution), `ResultRow` (row-level normalization of grades, points, credits, and sentinels), `ResultsCsv` (atomic CSV validator supporting `REGULAR`, `SUPPLEMENTARY`, and `REVALUATION` notifications), `ResultsSeeSync` (transactional SEE evidence synchronization on regular publication and staleness marking on withdrawal), and `PublishedResults` (student-scoped published result and attempt GPA reader).
+     - **Catalog, Timetables, Documents & AI**: `SubjectCatalog` (curriculum linkage lookup), `TimetableWriter` (mutex-locked timetable slot writer with class, room, and faculty conflict checks, supporting parallel electives/labs and shared open electives), `DocumentStorage` (private document repository outside web root with legacy fallback), `CertificateNumber` (atomic per-prefix sequence generator), `ReportValue` (provisional/unavailable metric value wrapper), and `AIProvider` (bounded HTTP adapter for local Ollama and OpenAI-compatible Chat Completions endpoints).
 
-3. **AJAX Endpoints**:
-   - Lightweight PHP scripts (`ajax_handler.php`, `ajax_get_classes.php`, `ajax_get_timings.php`, `curriculum_subject_ajax.php`) that read `$_GET` / `$_POST`, invoke model classes, and return JSON responses to dynamic UI widgets.
+3. **Domain Service Models (`*.class.php` & `services/`)**:
+   - Encapsulate business logic, transaction handling, before/after snapshots, and validations.
+   - Core administrative models: `User`, `Admin`, `Faculty`, `HOD`, `AcademicSection`, `SuperAdmin`, `AdminUser`, `Departments`, `Programs`, `AcademicYears`, `Regulations`.
+   - Course and offering models: `Subject` (offerings, elective groups, batch divisions), `CurriculumSubject` (master catalog), `Syllabus`.
+   - Assessment & OBE models: `CIA`, `CIAMarks`, `CIADataExchange`, `AssessmentStructure`, `COAttainment`, `CourseOutcome`, `SEEAssessment`, `LearningAnalytics`, `Timetable`, `AttendanceRules`, `FacCIAAnalysis2`, `FeedbackService`.
+   - Enterprise accreditation, governance & AI services (`jntuacea/services/`):
+     - `FeatureManager`: Dynamic **28-module** system gatekeeper, module dependency resolver, role visibility manager, and granular action-level RBAC enforcer (`role_module_permissions`: `view`, `edit`, `approve`, `export`).
+     - `SettingsService`: Autonomous regulation policy parameter engine backed by `academic_settings_audit` and `academic_policy_versions`.
+     - `BatchOBEService`: Multi-year cohort OBE hierarchy (`vision_mission` &rarr; `peos` &rarr; `po_pso` &rarr; Macro-Attainment), PO/PSO Articulation Matrix (NBA Tables 3.2 & 3.3.2), and longitudinal multi-batch quality analytics.
+     - `ExamResultsService`: Examination notification lifecycle (`DRAFT` &rarr; `REVIEWED` &rarr; `PUBLISHED`), CSV preview/ingestion, fractional grade point scale engine, CIA vs. uploaded internal marks discrepancy audit, audited SEE marks auto-synchronizer, and R23 Section 18 credit promotion simulation.
+     - `AttainmentPolicyService` & `AttainmentImportService`: Regulation/subject-type attainment profiles (`attainment_policies`), per-subject overrides (`subject_attainment_overrides`), and independent external CSV evidence import (`attainment_import_batches`).
+     - `SEEBlueprintService`, `QuestionMarksService` & `SeeMarksWriter`: Protected SEE question paper blueprint revisions (with snapshot archiving and score retention), question-level scoring, and direct ledger writes.
+     - `LabAssessmentService`: Atomic laboratory continuous evaluation rubric validation and persistence (`lab_rubric_evaluations`).
+     - `LessonPlanService` & `AcademicReviewService`: Lecture delivery planning, diary reconciliation, serialized NBA Criterion 2.2 course completion compliance audits (`course_completion_audits`), closed-loop CQI lifecycle (`course_cqi_actions`), and evidence-based Action Taken Report (ATR) PDF export.
+     - `StudentProfileService`: Biographical dossier, private Document Vault, original certificates custody ledger, statutory certificate issuance, and opaque token verification.
+     - `ReportSnapshotService`: Reproducible report snapshot persistence (`report_snapshots`) with policy and metric SHA-256 hashes.
+     - `AIProviderSettings` & `AIJobService`: Opt-in AI provider configuration (`ai_providers`), user task consent (`ai_job_consents`), evidence-only prompt construction, and human-reviewed draft lifecycle (`ai_jobs`).
+     - PDF & Excel Dossier Generators: `EBluebookPDFService` (strictly immune 14-page operational e-Bluebook), `CourseMasterFilePDFService` (7-section accreditation dossier reflecting persisted review states), `OBEAnalysisPDFService` (NBA attainment reports & SAR Form C-3), `EnhancedPDFService`, and `FeedbackExcelService`.
+
+4. **AJAX Endpoints**:
+   - Lightweight PHP scripts (`ajax_handler.php`, `ajax_get_classes.php`, `ajax_get_timings.php`, `curriculum_subject_ajax.php`) that enforce session/CSRF/scope guards, invoke model classes, and return JSON responses.
 
 ---
 
-## 3. Security & Authentication Architecture
+## 3. Security, Authentication & Access Control Architecture
 
-### 3.1 Session & Brute-Force Guard
+### 3.1 Session, CAPTCHA & Brute-Force Guard
 Authentication is handled in `index.php` using the `User` class:
 - **Rate-Limiting / Lockout**: Tracks failed login attempts per username using session keys:
-  - `login_attempts_md5(username)`: Increments on every invalid password attempt.
-  - `login_locked_md5(username)`: Enforces a 15-minute lockout (`lockDuration = 900`) once attempts reach 5 (`maxAttempts = 5`).
+  - `login_attempts_<md5(username)>`: Increments on every invalid password attempt.
+  - `login_locked_<md5(username)>`: Enforces a 15-minute lockout (`lockDuration = 900`) once attempts reach 5 (`maxAttempts = 5`).
+- **Cloudflare Turnstile Verification**: When `TURNSTILE_SECRET` is configured, login requests must pass server-side Turnstile verification; verification failures are strictly enforced.
 - **Session Fixation Prevention**: Calls `session_regenerate_id(true)` immediately upon successful authentication.
 - **Session Context Variables**:
   - `$_SESSION['user']`: Username / Roll number (lowercase string).
-  - `$_SESSION['userid']`: Primary key integer in `users` table.
+  - `$_SESSION['userid']`: Primary key integer in `users` table (`users.id`).
   - `$_SESSION['role']`: Normalized role string (`superadmin`, `admin`, `academic_section`, `hod`, `faculty`, `student`).
   - `$_SESSION['name']`: Uppercase display name.
   - `$_SESSION['dept_id']`: Department ID (set for HOD role).
   - `$_SESSION['facid']`: Faculty record ID (set for Faculty role).
 
-### 3.2 Transparent Password Hash Migration (MD5 to BCrypt)
-The system supports smooth legacy migration from MD5 to standard PHP `password_hash()` (BCrypt):
+### 3.2 Request Security & Ownership Scope (`\College\RequestSecurity` & `\College\RecordScope`)
+Initialized automatically whenever `DBCredentials` is instantiated:
+- **CSRF & Same-Origin Enforcement**: `\College\RequestSecurity::guardResources()` manages a per-session 64-character CSPRNG token (`$_SESSION['_csrf_token']`), validates `Origin`/`Referer` headers and `_csrf` tokens on all mutating `POST`/`PUT`/`PATCH`/`DELETE` requests, and uses an output buffer to automatically inject hidden `_csrf` inputs into internal `<form method="post">` tags and attach `X-CSRF-Token` headers to same-origin `fetch()` and `XMLHttpRequest` calls.
+- **Record Ownership Scope**: `\College\RecordScope` verifies that the signed-in actor has legitimate authority over requested `sub_id`, `class_id`, `stu_id`/`student_id`, `doc_id`, `cert_id`, or `curr_sub_id` parameters before controller or service logic executes.
+
+### 3.3 Transparent Password Hash Migration (MD5 to BCrypt)
+The system supports seamless legacy migration from MD5 to standard PHP `password_hash()` (BCrypt):
 1. When a user submits credentials, `User::authenticate()` inspects the stored password hash in `users.password`.
 2. If the hash begins with `$2y$` (standard BCrypt prefix), it verifies via `password_verify($password, $dbPassword)`.
 3. If it is legacy MD5:
    - It checks `md5($password) === $dbPassword`.
-   - On match, it immediately generates a new BCrypt hash via `password_hash($password, PASSWORD_BCRYPT)`.
-   - It updates the database record silently:
-     ```sql
-     UPDATE users SET password = ? WHERE id = ?
-     ```
-   - Logs the upgrade event: `Password silently upgraded MD5->bcrypt for user: <username>`.
+   - On match, it immediately generates a new BCrypt hash via `password_hash($password, PASSWORD_BCRYPT)`, updates `users.password`, and logs the upgrade event.
 
-### 3.3 Server & File Access Hardening
-Direct web access to sensitive environment definitions, SQL dumps, log files, and repository metadata is blocked via server-level `.htaccess` rewrite and deny rules:
-- Prohibits access to `.env*`, `*.sql`, `*.log`, `*.git*`, and composer files.
-- Protects `logs/` and `uploads/` directories from direct script execution.
+### 3.4 Server & File Access Hardening
+Direct web access to sensitive environment definitions, SQL dumps, internal core/tools/tests directories, log files, and retained legacy uploads is blocked via root and directory-level `.htaccess` rules:
+- Prohibits web access to `.env*`, `*.sql`, `*.log`, `*.git*`, `composer.*`, `database/`, `tools/`, `tests/`, `jntuacea/core/`, `jntuaceastudents/core/`, and `uploads/student_docs/`.
+- Student documents are stored outside the web root when `COLLEGE_DOCUMENT_ROOT` is configured and streamed exclusively through ownership-checked `viewdocument.php`.
 
 ---
 
-## 4. Logging & Audit Subsystems
+## 4. Logging, Snapshots & Audit Subsystems
 
-The application employs a multi-tiered audit strategy combining flat-file logs with specialized database audit tables:
+The application employs a multi-tiered forensic audit strategy combining flat-file logs with immutable database audit and snapshot tables:
 
 ### 4.1 Flat-File Logging (`logs.class.php`)
-Located in the `logs/` directory with daily-stamped log files:
-- **Activity Logs** (`logs/activity_YYYY-MM-DD.log`): Records successful logins, password updates, password resets, and critical workflow events via `Logs::activityLog()`.
-- **Error Logs** (`logs/error_YYYY-MM-DD.log`): Records SQL prepare/execute failures, database connection errors, and caught exceptions via `Logs::errLog()`.
+Located in `jntuacea/logs/` and `jntuaceastudents/logs/` with daily-stamped log files:
+- **Activity Logs** (`logs/activity_YYYY-MM-DD.log`): Records logins, password updates, and operational events via `Logs::activityLog()`.
+- **Error Logs** (`logs/error_YYYY-MM-DD.log`): Records SQL prepare/execute failures and exceptions via `Logs::errLog()`.
 
-### 4.2 Database Audit Trails
-For regulatory compliance and statutory governance:
-- **`activity_logs` Table**: Records general administrative actions (`user_id`, `action`, `details`, `timestamp`).
-- **`fac_activity_logs` Table**: Tracks faculty operational transactions such as attendance marking, diary updates, and marks entry (`user_id` referencing `faculties.id`, `action`, `details`, `timestamp`).
-- **`academic_settings_audit` Table**: Immutable audit log of all mutations to autonomous regulatory parameters (`setting_id`, `regulation_code`, `setting_key`, `old_value`, `new_value`, `changed_by`, `changed_at`, `ip_address`).
-- **`course_completion_audits` Table**: Formal end-of-semester syllabus reconciliation audit tracking planned vs actual conducted lectures, milestone completion dates, deviations, compensatory lectures, and formal faculty/HOD sign-off (NBA Criterion 2.2).
+### 4.2 Database Forensic & Governance Audit Trails
+- **`audit_logs` Table (Primary Unified Audit Trail)**: `DBCredentials::dbActivityLog()` and `DBCredentials::logAudit()` write all authenticated operational and security events directly to `audit_logs`, recording the signed-in `users.id` (`user_id`), `username`, `role`, `action`, `entity_type`, `entity_id`, `target_user_id`, `status`, `details`, `ip_address`, and `user_agent`.
+- **`academic_record_snapshots` Table**: Captures atomic before-and-after JSON payloads (`before_json`, `after_json`) with actor `users.id`, `department_id`, and mandatory `reason` whenever sensitive academic records are corrected, deleted, or replaced (e.g., 7-day single-student attendance corrections, HOD attendance deletion approvals, SEE blueprint revisions, and SEE result replacements).
+- **`workflow_review_history` Table**: Immutable state-transition log (`from_status` &rarr; `to_status`, `actor_user_id`, `remarks`) tracking review lifecycles across course completion audits, CQI actions, attendance deletion requests, and examination notifications.
+- **`academic_settings_audit` & `academic_policy_versions` Tables**: Track individual parameter edits (`academic_settings_audit`) and regulation-wide SHA-256 policy snapshot versions (`academic_policy_versions`).
+- **`report_snapshots` Table**: Persists reproducible report state (`policy_hash`, `metrics_hash`, `scope_json`, `metrics_json`, `cutoff_at`) for official accreditation exports such as Action Taken Reports (`download_atr.php`).
+- **`activity_logs` & `fac_activity_logs` Tables**: Legacy administrative and faculty operational log tables retained for historical continuity.
 
 ---
 
 ## 5. Transaction Safety
 
-Critical operations (such as attendance marking, timetable slot booking, student enrollment, and attendance deletion) wrap multiple SQL queries inside atomic database transactions:
+Critical operations (such as attendance marking, single-student attendance correction, attendance deletion approval, lab rubric submission, SEE blueprint revision, timetable slot booking, and result imports) wrap all data mutations, snapshot writes, and `audit_logs` entries inside a single atomic database transaction on the shared request connection (`\College\Connection::get()`):
 ```php
 $this->conn->begin_transaction();
 try {
-    // 1. Insert diary record
-    // 2. Insert attendance records for all mapped students
-    // 3. Log to fac_activity_logs
+    // 1. Lock target rows (FOR UPDATE) and capture before_json snapshot
+    // 2. Execute domain INSERT / UPDATE / DELETE statements
+    // 3. Persist academic_record_snapshots / workflow_review_history
+    // 4. Write to audit_logs via $this->dbActivityLog(...) and verify true return
     $this->conn->commit();
-} catch (Exception $e) {
+} catch (\Throwable $e) {
     $this->conn->rollback();
     $this->logs->errLog("Transaction failed: " . $e->getMessage());
+    throw $e;
 }
 ```
-This guarantees zero orphaned attendance records or inconsistent diary entries.
+If any step—including the audit or snapshot insert—fails, the entire transaction rolls back together, guaranteeing zero orphaned records or unaudited mutations.

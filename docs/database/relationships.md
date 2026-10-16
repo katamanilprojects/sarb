@@ -1,15 +1,15 @@
 # Database Relationships & Entity-Relationship Diagrams
 
-This document illustrates the database relationships, entity-relationship (ER) diagrams, exact foreign key constraints, and table join rules extracted directly from the system database schema (77 tables, covering 11 functional domains).
+This document illustrates the database relationships, entity-relationship (ER) diagrams, exact foreign key constraints, and table join rules extracted directly from the system database schema (**90 tables**, covering **12 functional domains**).
 
 ---
 
 ## 1. Identity & Profile Relationships
 
 > [!IMPORTANT]
-> **Critical Join Rule**: In this system, profile entities (`faculties`, `students`, `departments`) link to the `users` table via `username = username` (varchar match), not by `users.id`.
+> **Critical Join Rule**: In this system, profile entities (`faculties`, `students`, `departments`) link to the `users` table via `username = username` (varchar match), while unified audit, snapshot, review, and AI tables (`audit_logs`, `academic_record_snapshots`, `workflow_review_history`, `report_snapshots`, `ai_jobs`) link to `users.id`.
 > - `students.username = users.username`
-> - `faculties.username = users.username` (with optional `faculties.facultyid = users.id`)
+> - `faculties.username = users.username` (with `faculties.facultyid = users.id`)
 > - `departments.username = users.username`
 
 ```mermaid
@@ -32,6 +32,7 @@ erDiagram
         varchar designation
         int facultyid FK
         int dept_id FK
+        int sort_order
         varchar status
         timestamp updatedat
     }
@@ -78,6 +79,7 @@ erDiagram
     regulations ||--o{ regulation_course_categories : "reg_id"
     regulations ||--o{ regulation_course_types : "reg_id"
     regulations ||--o{ academic_settings : "reg_id"
+    regulations ||--o{ academic_policy_versions : "regulation_id"
 
     programs ||--o{ curriculum_subjects : "prog_id"
     regulations ||--o{ curriculum_subjects : "reg_id"
@@ -95,7 +97,7 @@ erDiagram
 ```
 
 ### Key Junction Mechanics:
-- **Regulation to Categories & Types**: SuperAdmin defines statutory parameters, degree credit targets (`regulations`), statutory category credit limits (`regulation_course_categories.reg_id = regulations.id`), and canonical assessment schemes (`regulation_course_types.reg_id = regulations.id`). Policy parameters are scoped via `academic_settings.reg_id = regulations.id`.
+- **Regulation to Categories, Types & Policy Versions**: SuperAdmin defines statutory parameters, degree credit targets (`regulations`), statutory category credit limits (`regulation_course_categories.reg_id = regulations.id`), and canonical assessment schemes (`regulation_course_types.reg_id = regulations.id`). Policy parameters are scoped via `academic_settings.reg_id = regulations.id` and versioned via `academic_policy_versions.regulation_id = regulations.id`.
 - **Class-to-Subject**: A class contains multiple subjects (`subjects.class_id = classes.id`). Classes also support optional sections (`classes.section`) and batch cohort tracking (`classes.batch_id`).
 - **Subject-to-Curriculum Master**: Subject offerings optionally link to the master catalog (`subjects.curr_sub_id = curriculum_subjects.id`), allowing standardized credits, lecture hours, delivery modes, and syllabus names across academic years. Elective groups and multi-batches are separated by `subjects.group_name`.
 - **Student-to-Subject (`student_sub`)**: A junction table mapping individual enrolled students to specific subjects (`student_sub.stu_id = students.id` and `student_sub.sub_id = subjects.id`). This allows accurate handling of elective subjects where only a subset of students in a class attend.
@@ -124,6 +126,8 @@ erDiagram
 
     classes ||--o{ class_timing_schedule : "class_id"
     class_timings ||--o{ class_timing_schedule : "timing_id"
+    classes ||--o{ class_timetables : "class_id"
+    subjects ||--o{ class_timetables : "subject_id"
 ```
 
 ### Key Attendance Constraints & Invariants:
@@ -138,11 +142,10 @@ erDiagram
    INSERT INTO diary (sub_id, faculty_id, date, hour, diary) VALUES (?, ?, ?, ?, ?);
    ```
 3. **Lesson Plan Reconciliation & Audit**:
-   Teaching diary records link to scheduled lesson plan entries via `diary.lesson_plan_id = lesson_plans.id`. Course completion metrics, unit milestone dates, deviations, and compensatory classes are stored in `course_completion_audits` for NBA 2.2 compliance.
-4. **Deletion/Correction Chain**:
-   When faculty mark wrong hours or duplicate entries, a record is entered into `attendance_delete_requests`:
-   - `subject_id`, `date`, `hour` identify the targeted period.
-   - Upon HOD approval, records matching `(subject_id, date, hour)` are deleted from `attendance` and `diary`.
+   Teaching diary records link to scheduled lesson plan entries via `diary.lesson_plan_id = lesson_plans.id`. Course completion metrics, unit milestone dates, deviations, compensatory classes, and HOD review metadata (`hod_reviewed_by`, `hod_approval_status`) are stored in `course_completion_audits` for NBA 2.2 compliance.
+4. **Deletion/Correction & Snapshot Chain**:
+   - Single-student attendance corrections within the 7-day window (`facupdatestudentattendance.php`, `\College\AttendanceCorrection::updateStudentStatuses`) require a mandatory reason and atomically persist before/after state in `academic_record_snapshots` and `audit_logs`.
+   - When faculty request period deletion (`attendance_delete_requests`), HOD review (`\College\AttendanceCorrection::reviewDeleteRequest`) locks the request row (`FOR UPDATE`), checks for co-teaching ambiguity, records before/after attendance and diary rows in `academic_record_snapshots`, logs the transition in `workflow_review_history` and `audit_logs`, and deletes matching `(subject_id, date, hour)` entries from `attendance` and `diary` on approval.
 
 ---
 
@@ -178,11 +181,19 @@ erDiagram
 erDiagram
     subjects ||--o{ course_outcomes : "sub_id"
     curriculum_subjects ||--o{ course_outcomes : "curr_sub_id"
+    curriculum_subjects ||--o{ curriculum_course_outcomes : "curr_sub_id"
+    curriculum_course_outcomes ||--o{ curriculum_co_po_mapping : "curr_co_id"
+    po_pso ||--o{ curriculum_co_po_mapping : "po_id"
     specialization ||--o{ po_pso : "specid"
     regulations ||--o{ po_pso : "reg_id"
+    student_batches ||--o{ po_pso : "batch_id"
 
     course_outcomes ||--o{ co_po_mapping : "co_id"
     po_pso ||--o{ co_po_mapping : "po_id"
+
+    regulations ||--o{ attainment_policies : "regulation_id"
+    subjects ||--o| subject_attainment_overrides : "subject_id"
+    subjects ||--o{ attainment_import_batches : "subject_id"
 
     subjects ||--o{ internal_assessments : "sub_id"
     internal_assessments ||--o{ assessment_components : "assessment_id"
@@ -192,7 +203,7 @@ erDiagram
     assessment_questions ||--o{ question_co_mapping : "question_id"
     course_outcomes ||--o{ question_co_mapping : "co_id"
 
-    student_sub ||--o{ student_marks : "stu_id"
+    students ||--o{ student_marks : "stu_id"
     assessment_questions ||--o{ student_marks : "question_id"
 ```
 
@@ -227,21 +238,26 @@ erDiagram
 
 ---
 
-## 7. Autonomous Academic Settings & Audit
+## 7. Autonomous Academic Settings, Policy Versions & RBAC Audit
 
 ```mermaid
 erDiagram
+    regulations ||--o{ academic_settings : "reg_id"
+    regulations ||--o{ academic_policy_versions : "regulation_id"
     academic_settings ||--o{ academic_settings_audit : "setting_id"
+    system_feature_modules ||--o{ role_module_permissions : "module_key"
 ```
 
 - **Dynamic Policy Parameters**: `academic_settings` provides regulation-scoped configurable rules (e.g., CIA theory best/worst weightages 80:20 vs 75:25, attendance detention/condonation limits, target attainment thresholds).
+- **Policy Version Snapshots**: `academic_policy_versions` records immutable SHA-256 policy hashes (`policy_hash`) and JSON snapshots (`settings_json`) per `regulation_id`.
 - **Immutable Mutation Audit**: Every edit to an academic setting creates an audit row in `academic_settings_audit` capturing the user, previous value, new value, timestamp, and IP address.
+- **Granular Role-Action Permissions**: `role_module_permissions` extends `system_feature_modules` with per-role (`faculty`, `hod`, `admin`, `academic_section`, `student`) action permissions (`view`, `edit`, `approve`, `export`).
 
 ---
 
 ## 8. Explicit Foreign Key Constraints Table
 
-Directly verified against the system database schema (all 71 active foreign key constraints):
+Directly verified against the system database schema (all active foreign key constraints):
 
 | Table | Constraint Symbol | Foreign Key Column | Target Table & Column | Cascade / Action |
 |---|---|---|---|---|
@@ -262,10 +278,15 @@ Directly verified against the system database schema (all 71 active foreign key 
 | `class_timing_schedule` | `fk_cts_class` | `class_id` | `classes(id)` | ON DELETE CASCADE |
 | `class_timing_schedule` | `fk_cts_timing` | `timing_id` | `class_timings(timing_id)` | - |
 | `course_completion_audits` | `fk_cca_sub` | `sub_id` | `subjects(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
+| `course_cqi_actions` | `fk_cqi_co` | `co_id` | `course_outcomes(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
+| `course_cqi_actions` | `fk_cqi_sub` | `sub_id` | `subjects(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
 | `course_outcomes` | `fk_co_curr_sub` | `curr_sub_id` | `curriculum_subjects(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
 | `course_outcomes` | `course_outcomes_ibfk_1` | `sub_id` | `subjects(id)` | - |
 | `co_po_mapping` | `co_po_mapping_ibfk_1` | `co_id` | `course_outcomes(id)` | ON DELETE CASCADE |
 | `co_po_mapping` | `co_po_mapping_ibfk_2` | `po_id` | `po_pso(id)` | ON DELETE CASCADE |
+| `curriculum_course_outcomes` | `fk_cco_curr_sub` | `curr_sub_id` | `curriculum_subjects(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
+| `curriculum_co_po_mapping` | `fk_ccpm_co` | `curr_co_id` | `curriculum_course_outcomes(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
+| `curriculum_co_po_mapping` | `fk_ccpm_po` | `po_id` | `po_pso(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
 | `curriculum_subjects` | `fk_curr_prog` | `prog_id` | `programs(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
 | `curriculum_subjects` | `fk_curr_reg` | `reg_id` | `regulations(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
 | `curriculum_subjects` | `fk_curr_spec` | `spec_id` | `specialization(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
@@ -284,12 +305,17 @@ Directly verified against the system database schema (all 71 active foreign key 
 | `internal_assessments` | `internal_assessments_ibfk_1` | `sub_id` | `subjects(id)` | - |
 | `internal_assessment_marks` | `internal_assessment_marks_ibfk_1` | `student_id` | `students(id)` | - |
 | `internal_assessment_marks` | `internal_assessment_marks_ibfk_2` | `subject_id` | `subjects(id)` | - |
+| `lab_rubric_criteria` | `fk_lrc_template` | `template_id` | `lab_rubric_templates(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
+| `lab_rubric_evaluations` | `fk_lre_uglab_mark` | `uglab_mark_id` | `uglab_internal_assessment_marks(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
+| `lab_subject_rubrics` | `fk_lsr_subject` | `subject_id` | `subjects(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
 | `lesson_plans` | `fk_lp_co` | `co_id` | `course_outcomes(id)` | ON UPDATE CASCADE |
 | `lesson_plans` | `fk_lp_subject` | `sub_id` | `subjects(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
 | `po_pso` | `po_pso_ibfk_1` | `specid` | `specialization(id)` | - |
 | `question_co_mapping` | `question_co_mapping_ibfk_2` | `co_id` | `course_outcomes(id)` | - |
 | `question_co_mapping` | `question_co_mapping_ibfk_1` | `question_id` | `assessment_questions(id)` | - |
 | `regulations` | `reg_prg_fk1` | `prog_id` | `programs(id)` | - |
+| `regulation_course_categories` | `fk_rcc_reg` | `reg_id` | `regulations(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
+| `regulation_course_types` | `fk_rct_reg` | `reg_id` | `regulations(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
 | `specialization` | `specialization_ibfk_3` | `dept_id` | `departments(id)` | ON UPDATE CASCADE |
 | `specialization` | `specialization_ibfk_4` | `prog_id` | `programs(id)` | ON UPDATE CASCADE |
 | `students` | `students_ibfk_1` | `class_id` | `classes(id)` | ON UPDATE CASCADE |
@@ -316,7 +342,6 @@ Directly verified against the system database schema (all 71 active foreign key 
 | `subjects` | `fk_subjects_curriculum` | `curr_sub_id` | `curriculum_subjects(id)` | ON DELETE SET NULL ON UPDATE CASCADE |
 | `subject_questionnaire_questions` | `subject_questionnaire_questions_ibfk_2` | `created_by_user_id` | `users(id)` | ON UPDATE CASCADE |
 | `subject_questionnaire_questions` | `subject_questionnaire_questions_ibfk_1` | `subject_id` | `subjects(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
-| `classes` | `fk_classes_batch` | `batch_id` | `student_batches(id)` | ON DELETE SET NULL ON UPDATE CASCADE |
 | `vision_mission` | `fk_vm_dept` | `dept_id` | `departments(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
 | `peos` | `fk_peos_dept` | `dept_id` | `departments(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
 | `peos` | `fk_peos_prog` | `program_id` | `programs(id)` | ON DELETE CASCADE ON UPDATE CASCADE |
@@ -370,12 +395,13 @@ erDiagram
     exam_notifications ||--o{ exam_results : "notification_id"
     students ||--o{ exam_results : "student_id"
     subjects ||--o{ exam_results : "subject_id"
-    exam_results ||--o{ external_assessment_marks : "syncs via htno & subject_code"
+    exam_notifications ||--o{ external_assessment_marks : "source_notification_id"
+    attainment_import_batches ||--o{ external_assessment_marks : "source_batch_id"
 ```
 
-- `exam_notifications` governs the publication lifecycle, release date, and visibility of semester examination results.
-- `exam_results` stores individual course grades, numerical internal/external marks, grade points, and registered/earned credits per student.
-- `external_assessment_marks` receives automated syncs from `exam_results` using matching `htno` and `subject_code` under Mode C direct ledger entry.
+- `exam_notifications` governs the publication lifecycle (`DRAFT` &rarr; `REVIEWED` &rarr; `PUBLISHED`), exam type (`REGULAR`, `SUPPLEMENTARY`, `REVALUATION`), release date, and visibility of semester examination results.
+- `exam_results` stores individual course grades, numerical internal/external marks, fractional grade points (`decimal(13,3)`), and registered/earned credits per student.
+- `external_assessment_marks` receives automated syncs from `exam_results` (`source_notification_id`) or independent CSV imports from `attainment_import_batches` (`source_batch_id`), retaining raw/scaled scores and `evidence_basis`.
 
 ---
 
@@ -387,12 +413,13 @@ erDiagram
     users ||--o{ student_documents : "users.username = student_documents.roll_no"
     users ||--o{ student_custodial_records : "users.username = student_custodial_records.roll_no"
     users ||--o{ student_certificate_requests : "users.username = student_certificate_requests.roll_no"
+    certificate_sequences ||--o{ student_certificate_requests : "allocates atomic certificate_no"
 ```
 
 - `student_profiles` expands the core `users` record into an institutional dossier with biographical, parental, reservation, entrance rank, and residential data.
-- `student_documents` manages digital uploads of verified certificates (PDF/PNG/JPG) with size limits and verification timestamps.
-- `student_custodial_records` acts as an auditable physical ledger for original certificates deposited during admission, tracking temporary checkouts (e.g. passport/visa applications) and reconciliation.
-- `student_certificate_requests` processes student applications for Custodial, Bonafide, Study & Conduct, Transfer (TC), and No Dues clearance certificates.
+- `student_documents` manages digital uploads of verified certificates (PDF/PNG/JPG) in private storage (`COLLEGE_DOCUMENT_ROOT`) with soft-delete retention (`deleted_at`, `deleted_by`).
+- `student_custodial_records` acts as an auditable physical ledger for original certificates deposited during admission, tracking temporary checkouts and reconciliation.
+- `student_certificate_requests` processes student applications for Custodial, Bonafide, Study & Conduct, Transfer (TC), and No Dues clearance certificates, using `certificate_sequences` for concurrency-safe serial numbers and `verification_token` (`char(64)`) for opaque public verification.
 
 ---
 
@@ -411,5 +438,30 @@ erDiagram
 
 - `lab_rubric_templates` defines master criteria sets (e.g. default 15M tripartite rubric) linked to individual criteria in `lab_rubric_criteria` via foreign key `template_id` with `ON DELETE CASCADE`.
 - `lab_subject_rubrics` allows per-course overrides for specialized lab subjects, referencing `subjects.id` and optionally originating from `lab_rubric_templates.id`.
-- `lab_rubric_evaluations` records criteria-level scores achieved by students, linked directly to the parent lab marks row in `uglab_internal_assessment_marks(id)` via `ON DELETE CASCADE`.
-- `course_cqi_actions` links Course Outcomes (`course_outcomes.id`) and Course Subjects (`subjects.id`) to track faculty remedial action plans for attainment shortfalls, reviewed and approved by the Department Head.
+- `lab_rubric_evaluations` records criteria-level scores achieved by students, linked directly to the parent lab marks row in `uglab_internal_assessment_marks(id)` via `ON DELETE CASCADE` with unique constraint `uq_lab_evaluation (uglab_mark_id, criterion_name)`.
+- `course_cqi_actions` links Course Outcomes (`course_outcomes.id`) and Course Subjects (`subjects.id`) to track faculty remedial action plans from submission through HOD review, execution evidence recording, and HOD follow-up closure.
+
+---
+
+## 13. Trusted Core Snapshots, Review History & Optional AI Infrastructure Relationships
+
+```mermaid
+erDiagram
+    users ||--o{ audit_logs : "user_id"
+    users ||--o{ academic_record_snapshots : "actor_user_id"
+    departments ||--o{ academic_record_snapshots : "department_id"
+    users ||--o{ workflow_review_history : "actor_user_id"
+    users ||--o{ report_snapshots : "owner_user_id"
+    departments ||--o{ report_snapshots : "department_id"
+    subjects ||--o{ report_snapshots : "subject_id"
+    users ||--o{ ai_job_consents : "user_id"
+    report_snapshots ||--o{ ai_jobs : "snapshot_id"
+    ai_providers ||--o{ ai_jobs : "provider_id"
+    users ||--o{ ai_jobs : "owner_user_id / reviewed_by"
+```
+
+- `audit_logs` captures unified forensic event logs across all authenticated actors.
+- `academic_record_snapshots` stores atomic before/after JSON snapshots whenever sensitive academic records are corrected, deleted, or replaced.
+- `workflow_review_history` records immutable state transitions across course completion audits, CQI actions, attendance deletion requests, and exam notifications.
+- `report_snapshots` stores reproducible metric and policy hashes for official accreditation reports and feeds curated, PII-free summaries into `ai_jobs`.
+- `ai_providers`, `ai_job_consents`, and `ai_jobs` govern opt-in, human-reviewed AI draft assistance (`MOD_AI_ASSISTANCE`).

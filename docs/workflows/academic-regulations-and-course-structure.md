@@ -47,11 +47,13 @@ flowchart TD
         REG["Master Regulations<br/>(regulations)<br/>Total Credits, Durations, Pathways"]
         CAT["Statutory Categories<br/>(regulation_course_categories)<br/>HSMC, BSC, ESC, PCC, PEC, OEC..."]
         CTYPE["Course Types & Marks Schemes<br/>(regulation_course_types)<br/>THEORY, LAB, INTEGRATED, PROJECT..."]
-        ASET["Academic Policy Settings<br/>(academic_settings)<br/>12 Domains: CIA, Attendance, Promotion..."]
+        ASET["Academic Policy Settings & Versions<br/>(academic_settings, academic_policy_versions)<br/>12 Domains: CIA, Attendance, Promotion..."]
+        APROF["Attainment & Grading Profiles<br/>(regulation_attainment_profiles)<br/>SEE Choice Rules, Grade Bands, Thresholds"]
 
         REG --> CAT
         REG --> CTYPE
         REG --> ASET
+        REG --> APROF
     end
 
     subgraph AcademicSectionEngine["2. Academic Section Course Structure Engine"]
@@ -180,7 +182,11 @@ The SuperAdmin interface enforces this with a live statutory status indicator:
 3. **Canonical Course Types & Assessment Defaults**:
    - Manages canonical course types (`THEORY`, `LAB`, `INTEGRATED`, `PROJECT`, etc.).
    - Specifies default CIE marks (e.g. 30), SEE marks (e.g. 70), total marks (100), CIE pass marks (11), SEE pass marks (25), and aggregate pass marks (40).
-4. **1-Click Regulation Cloning Engine**:
+4. **Regulation Attainment & Grading Profiles (`superadminattainmentpolicies.php`)**:
+   - Managed via `Services\AttainmentPolicyService` in `regulation_attainment_profiles` (keyed by `regulation_id`, `prog_code`, `subject_type`, and optional `curriculum_subject_id`).
+   - Configures CIE/SEE maxima, choice groups (`choice_groups`), fractional grade bands (`grade_bands`), and direct/indirect attainment weights.
+   - Every policy mutation in `academic_settings` or `regulation_attainment_profiles` records an immutable version snapshot in `academic_policy_versions` and an entry in `audit_logs`.
+5. **1-Click Regulation Cloning Engine**:
    - SuperAdmins can clone an existing verified regulation package (e.g. cloning R23 B.Tech to initialize R26 B.Tech).
    - Clones regulation metadata, all category records, all canonical course types, and all linked `academic_settings` atomically in a single transaction.
 
@@ -204,7 +210,9 @@ The SuperAdmin interface enforces this with a live statutory status indicator:
 4. **Elective Track & Vertical Governance**:
    - Manages vertical groupings for Professional Electives (PE Tracks 1–5: Data Science, Cyber Security, Cloud Computing, etc.).
    - Organizes Open Elective baskets (OE 1–4) for interdepartmental enrollment.
-5. **Board of Studies (BoS) Dossier Export**:
+5. **Master Curriculum Course Outcomes (`academicsectioncurriculumcos.php`)**:
+   - Manages centralized Board of Studies Course Outcomes in `curriculum_course_outcomes` (and syncs with `curriculum_subjects.course_outcomes_json` and offering-level `course_outcomes`).
+6. **Board of Studies (BoS) Dossier Export**:
    - Generates an official, printer-friendly curriculum blueprint including semester roadmaps, course-wise contact hours, credit distribution summaries, and BoS signature blocks.
 
 ---

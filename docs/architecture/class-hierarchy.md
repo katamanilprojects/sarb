@@ -1,10 +1,10 @@
 # Class Hierarchy & Object Model
 
-This document outlines the object-oriented structure, class inheritance trees, and composition patterns used across the application models.
+This document outlines the object-oriented structure, class inheritance trees, shared trusted core (`\College\*` namespace), enterprise service classes (`Services\*` namespace), and composition patterns used across both the Staff/Admin portal (`jntuacea/`) and the Student portal (`jntuaceastudents/`).
 
 ---
 
-## 1. Class Inheritance Diagram
+## 1. Class Inheritance & Architecture Diagram
 
 ```mermaid
 classDiagram
@@ -21,7 +21,12 @@ classDiagram
         #getDBUser() string
         #getDBPwd() string
         #getDBName() string
-        +dbActivityLog(userId, action, details, role)
+        +dbActivityLog(userId, action, details, role, entityType, entityId, targetUserId, status) bool
+        +logAudit(userId, role, action, entityType, entityId, details, targetUserId, status) bool
+        +getRegulationIdForSubject(subjects) string
+        +assertSubjectScope(subjectId) void
+        +assertClassScope(classId) void
+        +assertStudentScope(studentId, subjectId) void
     }
 
     class User {
@@ -39,16 +44,6 @@ classDiagram
         +getFacID() int
     }
 
-    class Departments {
-        +getAllDepartments() array
-        +getDepartmentById(id) array
-    }
-
-    class Programs {
-        +getAllPrograms() array
-        +getProgramById(id) array
-    }
-
     class SuperAdmin {
         -acad_years: AcademicYears
         -programs: Programs
@@ -59,6 +54,7 @@ classDiagram
         +addAcademicYear(...)
         +addClass(...)
         +addSpecialization(...)
+        +generateClassName(spec, yearsem, section) string
     }
 
     class Admin {
@@ -67,6 +63,9 @@ classDiagram
         +addStudent(rollno, name, class_id, date_of_joining) array
         +getAllStudentsByClass(class_id) array
         +addFaculty(data) array
+        +reorderDepartmentFaculties(dept_id, ordered_ids) array
+        +moveFacultySortOrder(faculty_id, direction) array
+        +resetFacultySortOrderToDefault(dept_id) array
         +addSubject(data) array
         +addFacultySubjectMapping(faculty_id, sub_id) array
         +addStudentSubjectMapping(stu_id, sub_id) array
@@ -87,7 +86,8 @@ classDiagram
         +mapFacultyToSubject(fac_id, sub_id) array
         +mapStudentsToSubject(sub_id, student_ids) array
         +getAttendanceDeleteRequests(dept_id) array
-        +approveAttendanceDeleteRequest(request_id) array
+        +processDeleteRequest(request_id, action) array
+        +getAttendanceDeleteAuditLogs(dept_id) array
     }
 
     class Faculty {
@@ -99,57 +99,18 @@ classDiagram
         +getAllMappedStudents(sub_id) array
     }
 
-    class CIA {
-        +addInternalAssessmentMarks(...) array
-        +getStInternalAssessmentMarks(...) array
-        +getStPGInternalAssessmentMarks(...) array
-        +getStUGLabInternalAssessmentMarks(...) array
-        +getStUGProjectInternalAssessmentMarks(...) array
-    }
-
-    class Timetable {
-        +getEffectiveTimingIdByClassId(class_id, for_date) int
-        +getClassTimetable(class_id) array
-        +saveTimetableSlot(...) array
-    }
-
-    class Syllabus {
-        +getAllPrograms() array
-        +getAllRegulations() array
-        +getSyllabusBySubId(sub_id) array
-    }
-
-    class CurriculumSubject {
-        +getSubjectsByContext(progId, regId, specId, yearsem) array
-        +getSubjectsForClass(regId, specId, yearsem) array
-        +lookupSubjectByCodeAndReg(subcode, regId) array
-        +addOrUpdateSubject(data) array
-        +deleteSubject(id) array
-    }
-
-    class AttendanceRules {
-        +getAllAttendanceRules() array
-        +getRulesByRegulation(reg_id) array
-    }
-
-    class Subject {
-        +getOfferedSubjectsByFaculty(faculty_id, acad_year) array
-        +getOfferedSubjectsByClass(class_id) array
-        +getOfferedSubjectsByDepartment(dept_id, acad_year) array
-        +getOfferedSubjectById(id) array
-        +getCurriculumSubjectsBySpecAndSem(spec_id, yearsem, reg_id) array
-        +isElectiveGroup(sub_id) bool
-        +getSubjectGroupBatches(sub_id) array
-    }
-
-    class LessonPlanService {
-        +getPlanBySubject(sub_id) array
-        +saveLecturePlan(data) array
-        +bulkImportFromCSV(sub_id, rows) array
-        +getReconciliationData(sub_id) array
-        +saveDiaryLessonPlanMappings(mappings) array
-        +saveCourseCompletionAudit(data) array
-        +getCourseCompletionAudit(sub_id) array
+    class FeatureManager {
+        -static instance: FeatureManager
+        +getInstance() FeatureManager
+        +loadModules() void
+        +getAllModules() array
+        +isModuleEnabled(moduleKey) bool
+        +canRoleAccess(moduleKey, role) bool
+        +canRoleWrite(moduleKey, role) bool
+        +canAction(module, action, role) bool
+        +requireAction(module, action) void
+        +savePermission(module, role, action, allowed) void
+        +updateModule(...) array
     }
 
     class SettingsService {
@@ -161,80 +122,87 @@ classDiagram
         +set(regCode, key, value, userId, ip) array
     }
 
-    class FeatureManager {
-        -static instance: FeatureManager
-        +getInstance() FeatureManager
-        +loadModules() void
-        +getAllModules() array
-        +getModulesGroupedByCategory() array
-        +isModuleEnabled(moduleKey) bool
-        +canRoleAccess(moduleKey, role) bool
-        +updateModule(moduleKey, data) bool
-    }
-
     class BatchOBEService {
         -static instance: BatchOBEService
         +getInstance() BatchOBEService
-        +getBatches(programId) array
-        +createBatch(data) array
-        +saveBatchVisionMission(data) array
-        +savePEO(data) array
-        +savePeoMissionMatrix(data) array
-        +savePoPeoMatrix(data) array
-        +getBatchMacroAttainment(batchId) array
+        +getBatches(programId, activeOnly) array
+        +createBatch(data, userId) array
+        +saveMasterVisionMission(...) array
+        +saveMasterPEO(...) array
+        +savePeoMissionMatrix(deptId, matrix, userId) array
+        +savePoPeoMatrix(deptId, matrix, userId, regId) array
+        +getBatchMacroAttainment(batchId, deptId) array
+        +computePOPSOArticulationMatrix(batchId, programId, departmentId) array
+        +getLongitudinalCohortAnalytics(deptId) array
     }
 
     class ExamResultsService {
         -static instance: ExamResultsService
         +getInstance() ExamResultsService
-        +getNotifications(academicYearId) array
-        +createNotification(data) array
-        +togglePublishStatus(id, status) bool
-        +importResultsCsv(notificationId, csvPath) array
-        +syncResultsToSeeMarks(notificationId, subjectId) array
-        +getStudentResults(rollNo, notificationId) array
+        +createNotification(data, userId) array
+        +previewCsv(notificationId, csvPath) array
+        +importCsv(notificationId, csvPath, userId) array
+        +reviewNotification(notificationId, userId, remarks) array
+        +togglePublishStatus(id, status, userId) array
+        +syncResultsToSeeMarks(notificationId, subjectId, userId, replaceExisting, reason) array
+        +getNotificationCiaDiscrepancies(notificationId) array
+        +evaluateCreditPromotionSimulation(classId, regulationCode) array
     }
 
     class StudentProfileService {
         -static instance: StudentProfileService
         +getInstance() StudentProfileService
-        +getProfile(studentId) array
-        +saveProfile(studentId, data) bool
-        +uploadDocument(studentId, docType, file) array
-        +addCustodialRecord(studentId, data) array
-        +requestCertificate(studentId, data) array
-        +getCertificateRenderData(certificateId) array
+        +getProfile(rollNo) array
+        +saveProfile(rollNo, data, userId) array
+        +uploadDocument(rollNo, docType, file, userId) array
+        +deleteDocument(docId, rollNo, actorId) array
+        +addCustodialRecord(data, userId) array
+        +requestCertificate(rollNo, certType, purpose, copies) array
+        +updateCertificateStatus(reqId, status, remarks, userId) array
+        +verifyCertificateByToken(reqId, token) array
     }
 
-    class EBluebookPDFService {
-        +generateBluebook(sub_id, options) string
-    }
-
-    class OBEAnalysisPDFService {
-        +generateOBEAnalysisReport(sub_id, options) string
-    }
-
-    class COAttainment {
-        +calculateDirectAttainment(sub_id) array
-        +calculatePOPSOAttainment(sub_id) array
-    }
-
-    class SEEAssessment {
-        +saveExternalMarks(data) array
-        +getExternalMarksBySubject(sub_id) array
-        +calculateSeeAttainment(sub_id) array
+    class CollegeCore["College\* Shared Trusted Core (22 Classes)"] {
+        +Connection::get() mysqli
+        +DateRange::validate(start, end) void
+        +RequestSecurity::guardResources(conn) void
+        +RecordScope::subject/classRecord/student(...) void
+        +AttendanceCalculator::evaluate(...) array
+        +AttendanceService::classSummary / studentSummary(...) array
+        +AttendanceCorrection::updateStudentStatuses / reviewDeleteRequest(...) void
+        +AssessmentPolicy::requireRegulationSettings / recordVersion(...) array
+        +MarksNormalizer::scaleMarks / selectChoiceQuestions(...) array
+        +AttainmentCalculator::calculateExternalAttainment(...) array
+        +ResultsPolicy::forSubject(...) array
+        +ResultRow::normalize(...) array
+        +ResultsCsv::validate(...) array
+        +ResultsSeeSync::subject / withdraw(...) array
+        +PublishedResults::forStudent(...) array
+        +TimetableWriter::add(...) int
+        +DocumentStorage::store / open(...) array
+        +CertificateNumber::next(...) string
+        +AIProvider::completeJson(...) array
     }
 
     %% Inheritance relationships
     DBCredentials <|-- User
-    DBCredentials <|-- Departments
-    DBCredentials <|-- Programs
     DBCredentials <|-- Subject
     DBCredentials <|-- SettingsService
     DBCredentials <|-- FeatureManager
     DBCredentials <|-- BatchOBEService
     DBCredentials <|-- ExamResultsService
     DBCredentials <|-- StudentProfileService
+    DBCredentials <|-- LessonPlanService
+    DBCredentials <|-- AcademicReviewService
+    DBCredentials <|-- AttainmentPolicyService
+    DBCredentials <|-- AttainmentImportService
+    DBCredentials <|-- LabAssessmentService
+    DBCredentials <|-- QuestionMarksService
+    DBCredentials <|-- SEEBlueprintService
+    DBCredentials <|-- SeeMarksWriter
+    DBCredentials <|-- ReportSnapshotService
+    DBCredentials <|-- AIProviderSettings
+    DBCredentials <|-- AIJobService
 
     User <|-- SuperAdmin
     User <|-- Admin
@@ -249,82 +217,114 @@ classDiagram
     User <|-- COAttainment
     User <|-- SEEAssessment
 
-    %% Composition and Delegation
-    SuperAdmin *-- Departments
-    SuperAdmin *-- Programs
-    SuperAdmin *-- AttendanceRules
-    Faculty ..> Subject : "delegates offering queries"
-    HOD ..> Subject : "delegates offering queries"
-    Faculty ..> ExamResultsService : "auto-syncs external marks"
+    DBCredentials ..> CollegeCore : "delegates connection, security & core math"
 ```
 
 ---
 
 ## 2. Base Classes Detailed
 
-### 2.1 `DBCredentials` (`dbcredentials.class.php`)
-- **Role**: Root database connection manager and activity logger.
-- **Connection Pattern**: Singleton-capable MySQLi connection.
-- **Environment Resolution**: Dynamically includes `dirname(__DIR__) . '/.env.php'` and binds constants `DB_HOST`, `DB_USER`, `DB_PASS`, and `DB_NAME`.
-- **Database Logging**: Provides `dbActivityLog($userId, $action, $details, $role)` which branches into `activity_logs` or `fac_activity_logs`.
+### 2.1 `DBCredentials` (`jntuacea/dbcredentials.class.php` & `jntuaceastudents/dbcredentials.class.php`)
+- **Role**: Root database connection manager, request security bootstrapper, scope verifier, and unified forensic audit logger.
+- **Connection Pattern**: Uses `\College\Connection::get()` (`core/Connection.php`) to guarantee a single shared `mysqli` connection per HTTP request or CLI run.
+- **Request Security Bootstrap**: Automatically invokes `\College\RequestSecurity::guardResources($this->conn)` on instantiation, enforcing CSRF verification, same-origin checks, and resource ownership guards.
+- **Environment Resolution**: Loads `.env.php` from the portal directory or parent repository root (`dirname(__DIR__) . '/.env.php'`).
+- **Unified Audit Logging**: `dbActivityLog($userId, $action, $details, $role, $entityType, $entityId, $targetUserId, $status)` and `logAudit(...)` write directly to the unified `audit_logs` table using the signed-in `users.id` (`$_SESSION['userid']`), `username`, `role`, `ip_address`, and `user_agent`.
+- **Policy & Scope Helpers**:
+  - `getRegulationIdForSubject(int|array $subjects): string`: Resolves and validates that the specified course offerings belong to a single exact `regulations.id`.
+  - `assertSubjectScope(int $subjectId): void`, `assertClassScope(int $classId): void`, `assertStudentScope(int $studentId, ?int $subjectId = null): void`: Delegate ownership checks to `\College\RecordScope`.
 
-### 2.2 `User` (`user.class.php`)
+### 2.2 `User` (`jntuacea/user.class.php` & `jntuaceastudents/user.class.php`)
 - **Role**: Base identity and authentication service for all authenticated actors.
 - **Inherits From**: `DBCredentials`.
 - **Core Methods**:
-  - `authenticate($username, $password)`: Checks username and password; auto-upgrades legacy MD5 hashes to BCrypt; updates last login logs.
-  - `verifyPwd($id, $password)`: Checks user password before permitting password changes.
+  - `authenticate($username, $password)`: Checks username and password (`status = 1`), enforces brute-force lockout counters, transparently upgrades legacy MD5 hashes to `PASSWORD_BCRYPT`, and logs authentication events.
+  - `verifyPwd($id, $password)`: Verifies current password before permitting credential updates.
   - `updatePassword($id, $newPassword, $role)`: Hashes new password with `PASSWORD_BCRYPT` and updates `users` table.
-  - `getDeptID()`: Resolves department ID for logged-in HOD.
-  - `getFacID()`: Resolves faculty ID for logged-in Faculty.
+  - `getDeptID()`: Resolves `departments.id` for logged-in HOD.
+  - `getFacID()`: Resolves `faculties.id` for logged-in Faculty.
 
 ---
 
-## 3. Domain Model Subclasses
+## 3. Domain Model Subclasses & Services
 
 ### 3.1 Role Service Models
-- **`SuperAdmin`** (`superadmin.class.php`): System-wide master data manager. Configures academic years, programs, statutory regulations and degree ceilings (with category balancing and canonical course type schemes), departments, specializations, classes (including section assignment via `generateClassName()`), class timings, and attendance rules. Composes instances of `Programs`, `Departments`, `Regulations`, and `AttendanceRules`.
-- **`Admin`** (`admin.class.php`): Institution administrator. Enrolls students, manages faculty profiles, sets student status, maps faculty/students to subjects, and resets passwords with remarks.
-- **`AcademicSection`** (`academicsection.class.php`): Academic affairs office. Manages buildings, examination halls, statutory regulations reference hub, autonomous course structure & BoS roadmaps, master curriculum subject catalogs (`CurriculumSubject`), syllabus files, and student/faculty password resets.
-- **`HOD`** (`hod.class.php`): Department head. Oversees departmental subjects, assigns faculty to subjects (`faculty_sub`), maps students (`student_sub`), manages timetable schedules, reviews/approves faculty attendance deletion requests, and approves end-of-course syllabus completion audits. Delegates subject queries to `Subject`.
-- **`Faculty`** (`faculty.class.php`): Instructors. Marks daily attendance with frictionless period topic logging, maintains teaching diary entries, logs exceptional attendance, submits attendance deletion requests, and submits syllabus completion compliance audits. Delegates course offering queries to `Subject`.
+- **`SuperAdmin`** (`jntuacea/superadmin.class.php`): System-wide master data manager. Configures academic years, programs, statutory regulations and degree ceilings (`Regulations`), departments (`Departments`), specializations, classes (including section assignment via `generateClassName()`), class timings, and attendance rules (`AttendanceRules`).
+- **`Admin`** (`jntuacea/admin.class.php`): Institution administrator (Principal). Enrolls students, manages faculty profiles, manages department-wise custom faculty sort ordering (`faculties.sort_order` via `reorderDepartmentFaculties()`, `moveFacultySortOrder()`, `resetFacultySortOrderToDefault()`), sets student status, maps faculty/students to subjects, and resets passwords with mandatory audit remarks.
+- **`AcademicSection`** (`jntuacea/academicsection.class.php`): Academic affairs office. Manages buildings, examination halls, statutory regulations reference hub, autonomous course structure & BoS roadmaps, master curriculum subject catalogs (`CurriculumSubject`), syllabus files, and student/faculty password resets.
+- **`HOD`** (`jntuacea/hod.class.php`): Department head. Oversees departmental subjects, assigns faculty to subjects (`faculty_sub`), maps students (`student_sub`), manages timetable schedules (`\College\TimetableWriter`), reviews/approves faculty attendance deletion requests (`\College\AttendanceCorrection`), and reviews end-of-course syllabus completion audits and CQI actions (`Services\AcademicReviewService`).
+- **`Faculty`** (`jntuacea/faculty.class.php`): Instructors. Marks daily attendance with frictionless period topic logging, performs 7-day single-student attendance corrections with mandatory reasons (`\College\AttendanceCorrection`), maintains teaching diary entries, logs exceptional attendance, submits attendance deletion requests, and submits syllabus completion compliance audits.
+- **`Student`** (`jntuaceastudents/student.class.php`): Student portal identity and Legacy helper model, complemented by specialized services in `jntuaceastudents/services/`.
 
-### 3.2 Subject Management Model
-- **`Subject`** (`subject.class.php`): Dedicated service model managing active subject offerings (`subjects` table), elective choice groups, laboratory batch divisions (`subjects.group_name`), and links to master curriculum catalog courses (`curr_sub_id`). Centralizes offering retrieval across faculty, departmental, and class contexts.
+### 3.2 Subject & Curriculum Management Models
+- **`Subject`** (`jntuacea/subject.class.php`): Dedicated service model managing active subject offerings (`subjects` table), elective choice groups, laboratory batch divisions (`subjects.group_name`), and links to master curriculum catalog courses (`curr_sub_id`).
+- **`CurriculumSubject`** (`jntuacea/curriculum_subject.class.php`): Academic section catalog manager for central course templates (`curriculum_subjects`), master Course Outcomes (`curriculum_course_outcomes`), and master CO-PO mappings (`curriculum_co_po_mapping`) with dual-sync to active course offerings. Supports deterministic AICTE/UGC credit calculation ($C = L + T + 0.5 \times \max(P, PR)$) and automatic assessment scheme pre-filling from `regulation_course_types`.
+- **`Syllabus`** (`jntuacea/syllabus.class.php`): Manages syllabus units and document metadata.
 
 ### 3.3 Academic, Assessment & OBE Service Models
-- **`CIA`** (`cia.class.php`): Handles Continuous Internal Assessment marks entry, calculations, condensed reports, and grade thresholds for UG, PG, Lab, and Project subjects.
-- **`CIAMarks`** (`ciamarks.class.php`): Modular CIA scoring engine managing question-level entries and validation.
-- **`AssessmentStructure`** (`assessmentstructure.class.php`): Configures assessment question components, Bloom taxonomy mapping, and max marks.
-- **`CourseOutcome`** (`courseoutcome.class.php`): Manages Course Outcome definitions, curriculum master linking (`curr_sub_id`), and cognitive level targets.
-- **`COAttainment`** (`coattainment.class.php`): Computes direct and indirect CO attainment, threshold adherence, and PO-PSO attainment articulation matrices.
-- **`SEEAssessment`** (`seeassessment.class.php`): Handles Semester End Examination assessment structures, detailed question-level entries, direct ledger marks, and external attainment calculation.
-- **`LearningAnalytics`** (`learninganalytics.class.php`): Computes OBE learning progression, score distributions, and accreditation metrics.
-- **`CIADataExchange`** (`ciadataexchange.class.php`): Manages Excel/CSV template generation, bulk import sanitization, and data export.
-- **`FacCIAAnalysis2`** (`facciaanalysis2.class.php`): Active choice-aware analytical calculator for direct/indirect CO-PO attainment matrices and visual charts (legacy `facciaanalysis.class.php` has been cleaned up and removed).
-- **`Timetable`** (`timetable.class.php`): Configures class timing templates, timing schedules per date ranges, weekly class timetables, and teacher allocations.
-- **`Syllabus`** (`syllabus.class.php`): Uploads and retrieves curriculum regulations and syllabus units.
-- **`CurriculumSubject`** (`curriculum_subject.class.php`): Academic section catalog manager for central course templates across regulations. Supports deterministic AICTE/UGC credit calculation ($C = L + T + 0.5 \times \max(P, PR)$), automatic assessment scheme pre-filling from `regulation_course_types`, multi-semester roadmap queries, and elective track groupings.
-- **`AttendanceRules`** (`attendancerules.class.php`): Manages attendance condonation and shortage criteria based on program regulations.
+- **`CIA`** (`jntuacea/cia.class.php`) & **`CIAMarks`** (`jntuacea/ciamarks.class.php`): Handle Continuous Internal Assessment marks entry, calculations, condensed reports, and question-level scoring across UG Theory, Lab, PG, and Project subjects.
+- **`AssessmentStructure`** (`jntuacea/assessmentstructure.class.php`): Configures assessment components (`assessment_components`), question labels/marks (`assessment_questions`), and Bloom taxonomy mapping (`blooms_levels`).
+- **`CourseOutcome`** (`jntuacea/courseoutcome.class.php`): Manages Course Outcome definitions (`course_outcomes`), curriculum master linking (`curr_sub_id`), and CO-PO/PSO correlation matrices (`co_po_mapping`).
+- **`COAttainment`** (`jntuacea/coattainment.class.php`) & **`FacCIAAnalysis2`** (`jntuacea/facciaanalysis2.class.php`): Choice-aware analytical calculators for direct and indirect CO-PO attainment matrices and visual charts.
+- **`SEEAssessment`** (`jntuacea/seeassessment.class.php`): Handles Semester End Examination structures, question-level entries, direct ledger marks, and external attainment calculation, delegating core normalization and attainment math to `\College\MarksNormalizer` and `\College\AttainmentCalculator`.
+- **`LearningAnalytics`** (`jntuacea/learninganalytics.class.php`): Computes OBE learning progression, score distributions, and accreditation metrics.
+- **`CIADataExchange`** (`jntuacea/ciadataexchange.class.php`): Manages Excel/CSV template generation, bulk import sanitization, and data export.
+- **`Timetable`** (`jntuacea/timetable.class.php` & `jntuaceastudents/timetable.class.php`): Resolves effective timing templates (`class_timing_schedule`), weekly class timetables, and faculty schedules.
+- **`AttendanceRules`** (`jntuacea/attendancerules.class.php`): Manages regulatory attendance condonation and detention thresholds (`attendance_rules`).
+- **`FeedbackService`** (`jntuacea/feedbackservice.class.php`): Multi-granularity analytical service for Course Outcome (CO) indirect surveys, 5-domain Course End Surveys (CES), and 19-criterion anonymous Student Faculty Appraisals.
 
-### 3.4 Regulatory Policy & Lesson Plan Services
-- **`SettingsService`** (`services/SettingsService.php`): Centralized singleton service providing access to regulation-specific autonomous academic parameters (`academic_settings` table), including CIA/SEE weightages, attendance thresholds, and attainment targets, backed by an immutable mutation audit log (`academic_settings_audit`).
-- **`LessonPlanService`** (`services/LessonPlanService.php`): Manages lecture-by-lecture syllabus planning (`lesson_plans` table), bulk CSV upload with Bloom's level and CO sanitization, end-of-course automated reconciliation against daily teaching diary logs (`diary.lesson_plan_id`), and NBA Criterion 2.2 course completion compliance audits (`course_completion_audits` table).
+### 3.4 Shared Trusted Core Classes (`jntuacea/core/` & `jntuaceastudents/core/` — `namespace College`)
+Maintained in `jntuacea/core/` and synchronized to `jntuaceastudents/core/` via `php tools/sync_core.php` (22 classes):
+1. **`Connection`** (`core/Connection.php`): Singleton per-request `mysqli` connection manager (`utf8mb4`), supporting CLI test database overrides (`CEA_DB_NAME`).
+2. **`Clock`** (`core/Clock.php`): Timezone-aware institutional clock defaulting to `Asia/Kolkata`.
+3. **`DateRange`** (`core/DateRange.php`): Validates paired `YYYY-MM-DD` start and end dates before binding them as SQL parameters in attendance and reporting queries.
+4. **`RequestSecurity`** (`core/RequestSecurity.php`): Generates and verifies per-session CSRF tokens (`_csrf`), enforces same-origin `Origin`/`Referer` headers on mutating requests, injects `_csrf` tokens into internal POST forms and same-origin `fetch`/`XHR` calls via output buffering, and runs `guardResources()` to enforce record ownership scope on request parameters.
+5. **`RecordScope`** (`core/RecordScope.php`): Enforces role- and ownership-based access boundaries for `subject()`, `classRecord()`, `student()`, `document()`, `certificate()`, and `curriculum()`.
+6. **`AttendanceCalculator`** (`core/AttendanceCalculator.php`): Evaluates conducted vs. attended hours, sanctioned permissions, single-subject minimum thresholds, and overall condonation/detention boundaries without premature rounding, returning `ELIGIBLE`, `CONDONATION`, `DETAINED`, `PROVISIONAL`, or `POLICY_REVIEW`.
+7. **`AttendanceService`** (`core/AttendanceService.php`): Unified attendance aggregation engine for individual students (`studentSummary()`) and class cohorts (`classSummary()`), honoring `students.date_of_joining`, `student_sub` mappings, `student_permissions`, and unrecorded timetable periods (`missing_periods`).
+8. **`AttendanceCorrection`** (`core/AttendanceCorrection.php`): Executes atomic 7-day single-student attendance corrections (`updateStudentStatuses()`) and row-locked HOD deletion request reviews (`reviewDeleteRequest()`) with co-teaching ambiguity guards, `academic_record_snapshots`, `workflow_review_history`, and `audit_logs`.
+9. **`AssessmentPolicy`** (`core/AssessmentPolicy.php`): Resolves exact regulation settings by `regulation_id` (refusing ambiguous regulation codes or cross-regulation fallbacks) and records immutable SHA-256 policy versions in `academic_policy_versions`.
+10. **`MarksNormalizer`** (`core/MarksNormalizer.php`): Normalizes gross-to-net marks (`scaleMarks()`), resolves student question choices once per choice group (`selectChoiceQuestions()`), shares multi-CO question weights equally (`EQUAL_SHARE`), and validates/estimates grade intervals (`GRADE_ESTIMATE`).
+11. **`AttainmentCalculator`** (`core/AttainmentCalculator.php`): Computes external/SEE Course Outcome attainment across detailed question scores, aggregate direct/imported scores, and grade-derived estimates, reporting `measured_students`, `estimated_students`, `missing_students`, and `provisional` status separately.
+12. **`ResultsPolicy`** (`core/ResultsPolicy.php`): Resolves a course offering's assessment profile and regulation-specific `grade_bands_json` without borrowing a global grade scale.
+13. **`ResultRow`** (`core/ResultRow.php`): Normalizes individual result rows against course policy, enforcing agreement between grade letters, fractional grade points, earned credits, and sentinel marks (`im = -7`, `em = -1`, `em = -5`, `AB`, `MP`, `WH`).
+14. **`ResultsCsv`** (`core/ResultsCsv.php`): Validates and parses `REGULAR`, `SUPPLEMENTARY`, and `REVALUATION` examination result CSV files atomically, matching regular notifications to exact offerings and supplementary/revaluation notifications to unambiguous historical cohort offerings.
+15. **`ResultsSeeSync`** (`core/ResultsSeeSync.php`): Synchronizes published regular-exam SEE evidence inside the caller's transaction while preserving manual/question-wise SEE marks, and marks dependent SEE evidence stale (`is_stale = 1`) when a notification is withdrawn.
+16. **`PublishedResults`** (`core/PublishedResults.php`): Student-scoped published results reader that isolates attempts by notification, resolves exact course offerings, and computes SGPA / attempt GPA (or pending GPA when results are withheld).
+17. **`SubjectCatalog`** (`core/SubjectCatalog.php`): Safely resolves optional `curriculum_subjects` linkage for offered courses without failing when historical links are absent or mismatched.
+18. **`TimetableWriter`** (`core/TimetableWriter.php`): Mutex-locked (`GET_LOCK`) transactional timetable slot insertion enforcing class, room, and faculty conflict checks while permitting multiple distinct subjects per slot within a class (electives/labs) and shared Open Electives across classes in the same room/faculty.
+19. **`DocumentStorage`** (`core/DocumentStorage.php`): Manages private document storage outside the web root (`COLLEGE_DOCUMENT_ROOT` with `private://` URIs) and authenticated streaming of retained legacy documents.
+20. **`CertificateNumber`** (`core/CertificateNumber.php`): Generates concurrency-safe sequential certificate numbers (`certificate_sequences` with `FOR UPDATE`).
+21. **`ReportValue`** (`core/ReportValue.php`): Value object representing measured, provisional, or unavailable report figures.
+22. **`AIProvider`** (`core/AIProvider.php`): Strict HTTP client for `OLLAMA` (private/loopback HTTP/HTTPS) and `OPENAI_COMPATIBLE` (public HTTPS) Chat Completions endpoints, rejecting redirects, link-local SSRF targets, numerical prose hallucinations, and ungrounded evidence references.
 
-### 3.5 Accreditation Dossier & Feedback Services
-- **`EBluebookPDFService`** (`services/EBluebookPDFService.php`): High-fidelity PDF generation engine powered by TCPDF producing official course Bluebooks containing Section 1 (Nominal Roll), Section 2A (Lesson Plan), Section 2B (Teaching Diary of Classes), Section 2C (Course Delivery Compliance & Deviation Report), Section 3 (Attendance Register), and Section 4 (CIA Marks Register).
-- **`OBEAnalysisPDFService`** (`services/OBEAnalysisPDFService.php`): Generates comprehensive NBA/NAAC Outcome-Based Education dossiers with CO formulation, CO-PO-PSO articulation matrices, question-to-CO mappings, direct/indirect attainment calculations, and visual attainment charts.
-- **`FeedbackService`** (`feedbackservice.class.php`): Multi-granularity analytical service for Course Outcome (CO) indirect surveys, Course End Surveys (CES), and Student Faculty Appraisals.
-- **`EnhancedPDFService`** (`services/EnhancedPDFService.php`): High-fidelity executive student feedback report generator.
-- **`FeedbackExcelService`** (`services/FeedbackExcelService.php`): Multi-tab analytical workbook generator powered by PhpSpreadsheet.
+### 3.5 Enterprise Governance, Assessment, Review & AI Services (`jntuacea/services/` — `namespace Services`)
+- **`FeatureManager`** (`services/FeatureManager.php`): Singleton gatekeeper managing **28 system modules** (`system_feature_modules`, normalizing `MOD_ATTENDANCE_DELETE_REQUESTS` to `MOD_ATT_REQUESTS`), inter-module dependencies (`isModuleEnabled`), role visibility (`VISIBLE`, `READONLY`, `HIDDEN`), and granular action-level RBAC (`role_module_permissions`: `view`, `edit`, `approve`, `export` via `canAction()`, `requireAction()`, `savePermission()`).
+- **`SettingsService`** (`services/SettingsService.php`): Regulation-scoped parameter manager (`academic_settings`), logging every mutation to `academic_settings_audit` and `academic_policy_versions`.
+- **`LessonPlanService`** (`services/LessonPlanService.php`): Manages lecture-by-lecture syllabus plans (`lesson_plans`), bulk CSV import, diary-to-plan reconciliation (`diary.lesson_plan_id`), and serialized NBA Criterion 2.2 course completion compliance submissions (`course_completion_audits`) that lock upon submission until returned by the HOD.
+- **`AcademicReviewService`** (`services/AcademicReviewService.php`): Powers the unified Faculty/HOD review queue (`reviewqueue.php`), managing HOD review of course completion audits (`reviewAudit()`), CQI action review/return (`reviewCqi()`), faculty CQI revision and execution evidence recording (`reviseCqi()`, `recordCqiExecution()`), HOD CQI verification and closure (`closeCqi()`), `workflow_review_history` logging, and snapshot-backed Action Taken Report (ATR) PDF generation (`renderAtrPdf()`, `download_atr.php`).
+- **`LabAssessmentService`** (`services/LabAssessmentService.php`): Validates and atomically commits UG laboratory continuous evaluation marks (`uglab_internal_assessment_marks`) together with criteria-level rubric evaluations (`lab_rubric_evaluations`).
+- **`SEEBlueprintService`** (`services/SEEBlueprintService.php`): Manages SEE question paper blueprints (`facseecompques.php`), requiring confirmation and a reason when revising blueprints with existing marks, archiving prior state to `academic_record_snapshots`, preserving retained question scores, and invalidating stale consolidated totals until reconsolidated.
+- **`QuestionMarksService`** (`services/QuestionMarksService.php`): Validates and records detailed question-by-question marks (`student_marks`) and reconsolidates SEE totals using `\College\MarksNormalizer`.
+- **`SeeMarksWriter`** (`services/SeeMarksWriter.php`): Records direct and consolidated external marks in `external_assessment_marks` with before/after snapshot auditing.
+- **`AttainmentPolicyService`** (`services/AttainmentPolicyService.php`): Manages regulation/subject-type attainment profiles (`attainment_policies`) and per-subject overrides (`subject_attainment_overrides`) configured via `superadminattainmentsettings.php`.
+- **`AttainmentImportService`** (`services/AttainmentImportService.php`): Previews and commits external aggregate, grade-only, or question-wise CSV evidence (`attainment_import_batches`, `attainmentimport.php`) independently of examination result publication.
+- **`BatchOBEService`** (`services/BatchOBEService.php`): Manages master Vision/Mission (`vision_mission`), PEOs (`peos`), PEO-Mission (`peo_mission_mapping`) and PO-PEO (`po_peo_mapping`) articulation matrices, student cohorts (`student_batches`), evidence-grounded Macro-Attainment rollups, PO/PSO Program Articulation Matrix (`computePOPSOArticulationMatrix`), and longitudinal cohort analytics (`getLongitudinalCohortAnalytics`).
+- **`ExamResultsService`** (`services/ExamResultsService.php`): Manages examination notifications (`exam_notifications` workflow: `DRAFT` &rarr; `REVIEWED` &rarr; `PUBLISHED`), CSV preview and import (`exam_results`), CIA vs. uploaded internal discrepancy audits, audited SEE marks synchronization (`syncResultsToSeeMarks`), and R23 Section 18 credit promotion simulation.
+- **`StudentProfileService`** (`services/StudentProfileService.php`): Manages student biographical dossiers (`student_profiles`), private cloud document vault (`student_documents` with soft-delete retention), physical certificate custody ledger (`student_custodial_records`), statutory certificate applications (`student_certificate_requests`), atomic numbering (`\College\CertificateNumber`), and opaque token verification (`viewcertificate.php`).
+- **`ReportSnapshotService`** (`services/ReportSnapshotService.php`): Persists and retrieves immutable report snapshots (`report_snapshots`) with scope, policy, and metric hashes.
+- **`AIProviderSettings`** (`services/AIProviderSettings.php`) & **`AIJobService`** (`services/AIJobService.php`): Manage opt-in AI provider configurations (`ai_providers`, `superadminaiproviders.php`), per-user task consent (`ai_job_consents`), curated PII-free CO summary job queuing (`ai_jobs`, `aiassistance.php`), bounded CLI worker execution (`tools/ai_worker.php`), lease recovery, and human review/approval of generated narratives and ATR proposals.
 
-### 3.6 Enterprise Modular & Accreditation Services
-- **`FeatureManager`** (`services/FeatureManager.php`): Singleton feature gatekeeper managing 27 system modules, category groupings, role overrides, and database activation states (`system_feature_modules` & `system_feature_role_overrides`). Controls feature visibility, read-only permissions, and prevents runtime execution of disabled modules.
-- **`BatchOBEService`** (`services/BatchOBEService.php`): Master OBE governance service managing institutional & departmental Vision/Mission (`vision_mission`), Program Educational Objectives (`peos`), PEO-to-Mission correlation matrices (`peo_mission_mapping`), PO/PSO-to-PEO articulation matrices (`po_peo_mapping`), student cohorts (`student_batches`), cohort target overrides (`batch_peo_targets`), PO/PSO Program Articulation Matrix (NBA Tables 3.2 & 3.3.2 blending 80% direct + 20% indirect CES), and longitudinal multi-batch quality analytics.
-- **`ExamResultsService`** (`services/ExamResultsService.php`): Autonomous examination publication engine managing notification registration (`exam_notifications`), bulk CSV examination result parsing, UGC 10-point scale grade point calculation (`exam_results`), student SGPA generation, automated marks synchronization into faculty Semester End Examination (SEE) registers (`external_assessment_marks`), and advisory credit-based promotion pipeline simulation (R23 Section 18).
-- **`StudentProfileService`** (`services/StudentProfileService.php`): Comprehensive student identity and record management service managing biographical dossiers (`student_profiles`), secure institutional cloud document vault uploads (`student_documents`), statutory physical certificates custody ledger (`student_custodial_records`), self-service student certificate applications and generation (`student_certificate_requests`), and cryptographic SHA-256 QR certificate verification.
-- **`CourseMasterFilePDFService`** (`services/CourseMasterFilePDFService.php`): Autonomous Course Master File generator producing official 7-section accreditation master dossiers (Cover Page, Syllabus with COs, Lesson Plans, Daily Class Diary, Delivery Reconciliation Audit, DAAC Verification Certificate, Consolidated CIA Marks) while keeping `EBluebookPDFService.php` strictly untouched.
-- **`StudentAttendanceService`** (`jntuaceastudents/services/StudentAttendanceService.php`): Student portal attendance transparency and risk analytics engine, computing real-time Safe Margin ($\max(0, \lfloor(P - 0.75T)/0.75\rfloor)$) and Recovery Periods ($\max(0, \lceil(0.75T - P)/0.25\rceil)$).
+### 3.6 Accreditation Dossier & Export Services (`jntuacea/services/`)
+- **`EBluebookPDFService`** (`services/EBluebookPDFService.php`): Strictly immune TCPDF generator producing the official 14-page operational course e-Bluebook (`download_bluebook.php`: Sections 1, 2A, 2B, 2C, 3, and 4).
+- **`CourseMasterFilePDFService`** (`services/CourseMasterFilePDFService.php`): Generates the 7-section Autonomous Course Master File (`download_coursemasterfile.php`), accurately reflecting persisted faculty submission and HOD review statuses from `course_completion_audits`.
+- **`OBEAnalysisPDFService`** (`services/OBEAnalysisPDFService.php`): Generates NBA/NAAC Outcome-Based Education dossiers and standalone NBA SAR Form C-3 reports (`download_obe_analysis.php`).
+- **`EnhancedPDFService`** (`services/EnhancedPDFService.php`) & **`FeedbackExcelService`** (`services/FeedbackExcelService.php`): Generate executive PDF dossiers (`download_feedback_enhanced.php`) and multi-tab Excel workbooks (`download_feedback_excel.php`) for student feedback surveys.
 
-
-
+### 3.7 Student Portal Services (`jntuaceastudents/services/`)
+- **`BaseService`** (`jntuaceastudents/services/BaseService.php`): Base service wrapper for student portal modules.
+- **`StudentRepository`** (`jntuaceastudents/services/StudentRepository.php`): Data access layer retrieving student enrollment, class, and subject mappings.
+- **`StudentAttendanceService`** (`jntuaceastudents/services/StudentAttendanceService.php`): Delegates to `\College\AttendanceService` to compute real-time student attendance percentages, Safe Margin, and Recovery Periods (`studenthome.php`, `studentsubatt.php`).
+- **`StudentAssessmentService`** (`jntuaceastudents/services/StudentAssessmentService.php`): Retrieves student CIA marks across UG Theory, Lab, PG, and Project courses.
+- **`StudentFeedbackService`** (`jntuaceastudents/services/StudentFeedbackService.php`): Handles student submission of Course Outcome surveys (`student_co_feedback`), 5-domain Course End Surveys (`student_ces_feedback`), and anonymous Faculty Appraisals (`student_faculty_feedback`).
+- **`StudentProfileService`** (`jntuaceastudents/services/StudentProfileService.php`), **`ExamResultsService`** (`jntuaceastudents/services/ExamResultsService.php`), and **`FeatureManager`** (`jntuaceastudents/services/FeatureManager.php`): Student-portal counterparts for biographical profiles, private document vault uploads, certificate requests, semester grade cards (with fractional grade points), and feature visibility checks.

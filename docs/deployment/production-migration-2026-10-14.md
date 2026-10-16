@@ -1,6 +1,6 @@
 # Production database upgrade — October 14, 2026
 
-Import **`migration_production_complete_20261014.sql`** from the project root into
+Import **`database/migrations/archive/migration_production_complete_20261014.sql`** into
 the existing application database. It upgrades the schema represented by
 `u182589698_jntuaceasarb_server_131026.sql`, including databases on which some of
 the earlier migrations have already run.
@@ -10,7 +10,7 @@ the earlier migrations have already run.
 1. Export a fresh full database backup including application data.
 2. Pause application writes during the import.
 3. In phpMyAdmin, select the existing application database, open **Import**, and
-   choose `migration_production_complete_20261014.sql`. Keep the original file's
+   choose `database/migrations/archive/migration_production_complete_20261014.sql`. Keep the original file's
    contents intact. Alternatively use the MySQL client with the database selected.
 4. Stop on any SQL error. Success is indicated by
    `COMPLETE: production upgrade 20261014`, followed by the migration ledger
@@ -19,7 +19,7 @@ the earlier migrations have already run.
 5. Resume application writes after a successful import.
 
 Use this consolidated file instead of importing the older files again. Do not
-import a local schema dump over the populated production database. The supplied
+import a local schema dump (`database/dumps/u182589698_jntuaceasarb_local_db_scheme_.sql`) over the populated production database. The supplied
 October 13 schema export omits operational data from several tables, so it is
 not a substitute for the fresh full backup in step 1.
 
@@ -33,14 +33,14 @@ routine privileges or custom `DELIMITER` handling. It contains no credentials,
 | Original source | Consolidated behavior |
 | --- | --- |
 | `migrations/2026_10_05_curriculum_co_matrix_dual_sync.sql` | Add missing CO curriculum links; backfill master/sibling COs and mappings; correct `idx_co_curr_num` to `(curr_sub_id, co_number)`. |
-| `migrations/2026_10_07_accreditation_and_governance.sql` | Accreditation modules, per-regulation defaults, lab rubrics and CQI tables. The root accreditation file and database baseline are identical copies. |
-| `database/migrations/20261008_001_trusted_core.sql` | Permissions, review/audit history, report snapshots, policies and AI job infrastructure. |
-| `database/migrations/20261008_002_document_lifecycle.sql` | Retained document deletion metadata and certificate verification tokens. |
-| `database/migrations/20261008_003_attainment_integrations.sql` | Attainment policies/imports, raw marks, higher precision, AI providers and job metadata. |
-| `database/migrations/20261008_004_ai_queue_guards.sql` | Queue ownership/retry/review fields and provider version. |
+| `database/migrations/archive/migration_accreditation_071026.sql` | Accreditation modules, per-regulation defaults, lab rubrics and CQI tables. |
+| `database/migrations/archive/20261008_001_trusted_core.sql` | Permissions, review/audit history, report snapshots, policies and AI job infrastructure. |
+| `database/migrations/archive/20261008_002_document_lifecycle.sql` | Retained document deletion metadata and certificate verification tokens. |
+| `database/migrations/archive/20261008_003_attainment_integrations.sql` | Attainment policies/imports, raw marks, higher precision, AI providers and job metadata. |
+| `database/migrations/archive/20261008_004_ai_queue_guards.sql` | Queue ownership/retry/review fields and provider version. |
 | `migrations/2026_10_09_exam_results_scheme_sync_and_see_attainment.sql` | Malpractice status, result indexes, 60-character SEE evidence basis and result module description. |
-| `database/migrations/20261013_001_faculty_sort_order.sql` | Faculty ordering and its department index. Existing nonzero orders survive; unranked members append after the current maximum. |
-| Root `migration_production_server_sync_20261008.sql` | Its accreditation/integration schema changes are included. Existing module switches and rubric definitions are retained; unrelated building seeds are omitted. |
+| `database/migrations/archive/20261013_001_faculty_sort_order.sql` | Faculty ordering and its department index. Existing nonzero orders survive; unranked members append after the current maximum. |
+| `database/migrations/archive/migration_production_server_sync_20261008.sql` | Its accreditation/integration schema changes are included. Existing module switches and rubric definitions are retained; unrelated building seeds are omitted. |
 
 The October 6 migrations' regulation fields, category/type tables, and R25/R26
 seed records are already represented in the supplied server baseline. The

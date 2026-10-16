@@ -1,6 +1,6 @@
 # Attendance Marking & Diary Entry Workflow
 
-This document describes the complete lifecycle of marking daily class attendance and entering teaching diary logs by faculty members.
+This document describes the complete lifecycle of marking daily class attendance, entering teaching diary logs, and computing regulatory attendance standing and student risk metrics.
 
 ---
 
@@ -13,7 +13,7 @@ sequenceDiagram
     participant UI as facaddattendance.php
     participant Model as faculty.class.php
     participant DB as MariaDB (attendance & diary)
-    participant Log as fac_activity_logs
+    participant Log as audit_logs
 
     Faculty->>UI: Select Subject & Date
     UI->>Model: getUnmarkedHours(sub_id, date)
@@ -41,7 +41,7 @@ sequenceDiagram
         end
     end
     
-    Model->>Log: dbActivityLog(fac_id, "Attendance", details, "Faculty")
+    Model->>Log: dbActivityLog(user_id, "Attendance", details, "faculty")
     Note over Model,DB: Commit Transaction
     
     Model-->>UI: Return ['status' => 1]
@@ -53,11 +53,11 @@ sequenceDiagram
 ## 2. Step-by-Step Execution
 
 ### Step 1: Subject Selection & Unmarked Hours Fetch
-- Faculty logs in and navigates to `facaddattendance.php`.
+- Faculty logs in and navigates to `facaddattendance.php` (guarded by `FeatureManager::requireAccess('MOD_ATTENDANCE')`).
 - The system loads the faculty's assigned subjects via the `Subject` service (`Subject::getOfferedSubjectsByFaculty($faculty_id)`).
 - When a subject and date are picked, an AJAX request invokes `Faculty::getUnmarkedHours($sub_id, $date)`.
 - The method compares the class timing periods configured in `class_timing_schedule` against periods already marked in `attendance` for that `sub_id` and `date`.
-- Only unrecorded hours are displayed as selectable checkboxes. This prevents accidental duplicate attendance submissions.
+- Only unrecorded hours are displayed as selectable checkboxes, preventing accidental duplicate attendance submissions.
 
 ### Step 2: Student Enrollment Verification
 - The roster displayed to the faculty is populated from the `student_sub` junction table via `Faculty::getMappedStudents($sub_id)`.
@@ -66,7 +66,7 @@ sequenceDiagram
 
 ### Step 3: Frictionless Daily Teaching Diary
 - Faculty enters a natural free-text summary of syllabus topics covered during the selected periods.
-- **Zero-Friction Design**: Daily marking is 100% focused on natural topic logging with zero friction (no mandatory CO selection, no popup prompts during daily attendance).
+- **Zero-Friction Design**: Daily marking is 100% focused on natural topic logging with zero friction (no mandatory CO selection or popup prompts during daily attendance).
 - Lesson plan alignment and CO tagging are performed systematically at the end of the semester during the reconciliation phase (`faclessonplanreconciliation.php`), linking `diary.lesson_plan_id` to planned lectures.
 - Submitting attendance without a diary entry is prevented by client-side and server-side validation.
 
@@ -84,33 +84,41 @@ When the faculty submits the form:
    ```
    - If the student's ID was in the checked array, `status = 'P'`.
    - If not checked, `status = 'A'`.
-5. An audit entry is recorded in `fac_activity_logs`.
+5. An audit entry is recorded in `audit_logs` via `dbActivityLog()`.
 6. `$this->conn->commit()` is executed. If any insert fails, `$this->conn->rollback()` runs, preventing partial or inconsistent data.
 
 ---
 
-## 3. Exceptional Attendance Marking
+## 3. Exceptional Attendance & 7-Day Single-Student Corrections
 
-For special college events, sports meets, campus placement drives, or institutional permissions:
-- Handled in `facexceptionalattendance.php`.
-- Uses `Faculty::getStudentsForExceptionalAttendance($sub_id, $date, $hour)` and `Faculty::markExceptionalAttendance()`.
-- Allows faculty to mark or update attendance for designated students outside standard timetable slots, automatically checking `student_permissions` table for sanctioned duty leaves.
+- **Exceptional Attendance (`facexceptionalattendance.php`)**:
+  - Uses `Faculty::getStudentsForExceptionalAttendance($sub_id, $date, $hour)` and `Faculty::markExceptionalAttendance()`.
+  - Allows faculty to mark or update attendance for designated students (such as late entrants or students with sanctioned `student_permissions` duty leaves).
+- **7-Day Single-Student Status Correction (`facupdatestudentattendance.php`)**:
+  - Powered by `\College\AttendanceCorrection::updateStudentStatuses()`.
+  - Permits correcting individual student `P`/`A` statuses within the last 7 calendar days when a mandatory justification reason is supplied, atomically storing before/after state in `academic_record_snapshots` and `audit_logs`.
 
 ---
 
-## 4. Attendance Reports & Official Bluebook Exports
+## 4. Shared Attendance Engine, Reports & Official Bluebook Exports
 
-Faculty and administrators can inspect and export marked attendance through:
+The shared core classes `\College\AttendanceService` (`core/AttendanceService.php`) and `\College\AttendanceCalculator` (`core/AttendanceCalculator.php`) provide deterministic attendance counting and classification across portals:
+- **Joining Date & Enrollment Scope**: Only counts sessions conducted on or after `students.date_of_joining` for subjects mapped to the student in `student_sub`.
+- **Unrecorded Periods & Provisional Flag**: Detects conducted diary periods where a mapped student has no `attendance` row (`missing_periods`), flagging the standing as `PROVISIONAL` until reconciled.
+- **Sanctioned Permissions (`student_permissions`)**: Evaluates sanctioned on-duty/medical permissions according to configured regulation policy (`credit` vs. `neutral`), or returns `POLICY_REVIEW` if a student's eligibility boundary depends on permissions when no explicit regulation permission treatment is configured.
+- **Unrounded Boundary Classification**:
+  - `ELIGIBLE`: Aggregate attendance $\ge 75\%$ (unrounded) and every mapped subject meets the regulation single-course minimum (e.g., $\ge 40\%$ UG / $\ge 50\%$ PG).
+  - `CONDONATION`: Aggregate attendance in $[65\%, 75\%)$ and single-course minimums satisfied.
+  - `DETAINED`: Aggregate attendance $< 65\%$ or any course below the single-course floor.
+
+### Key Reporting Touchpoints:
 - **`facshowattendance.php`**: Daily period-by-period attendance view and monthly summary.
-- **`adminshowallclsattendance.php` / `hodshowallclsattendance.php` / `academicsectionshowallclsattendance.php`**: Aggregate class percentage reports categorized by autonomous rules:
-  - $\ge 75\%$: Satisfactory / Eligible for Semester End Examinations.
-  - $65\% \text{ to } 74.99\%$: Condonation eligible (subject to medical certificate & fee).
-  - $< 65\%$: Detention risk / Ineligible for SEE.
+- **`adminshowallclsattendance.php` / `hodshowallclsattendance.php` / `academicsectionshowallclsattendance.php`**: Aggregate class percentage reports across combined, enhanced, and subject-wise views.
 - **Attendance Condonation & Detention Gazette PDF (`MOD_ATTENDANCE_CONDONATION_GAZETTE`)**:
-  - Exported via `download_attendance_gazette.php?class_id=X` from `hodshowclsattendance.php`.
-  - Classifies enrolled cohort into **Eligible ($\ge 75\%$)**, **Condonation ($65.0\% \le A < 75.0\%$)**, and **Detained ($< 65.0\%$ or single subject $< 40\%$)** with signature blocks for HOD, Principal, and Controller of Examinations.
+  - Exported via `download_attendance_gazette.php?class_id=X` from `hodshowclsattendance.php` using `\College\AttendanceService::classSummary()`.
+  - Classifies the enrolled cohort into **Eligible**, **Condonation**, **Detained**, **Provisional**, or **Policy Review** with signature blocks for HOD, Principal, and Controller of Examinations.
 - **Student Attendance Risk Gauge (`MOD_STUDENT_ATTENDANCE_RISK`)**:
-  - Displayed on `studenthome.php` with real-time **Safe Margin** ($\max(0, \lfloor(P - 0.75T)/0.75\rfloor)$) and **Recovery Periods Needed** ($\max(0, \lceil(0.75T - P)/0.25\rceil)$).
+  - Displayed on `jntuaceastudents/studenthome.php` via `StudentAttendanceService` (`\College\AttendanceService::studentSummary()`), computing real-time **Safe Margin** ($\max(0, \lfloor(P - 0.75T)/0.75\rfloor)$) and **Recovery Periods Needed** ($\max(0, \lceil(0.75T - P)/0.25\rceil)$).
 - **`download_bluebook.php`**: Generates the official university e-Bluebook via `EBluebookPDFService`:
   - **Section 2B ('DIARY OF LECTURER CLASSES')**: Rendered in a clean 4-column format (`S.No`, `Date`, `Time`, `Topics Covered`).
   - **Section 3 ('ATTENDANCE REGISTER')**: Comprehensive student-by-student period roll with monthly aggregates and overall attendance percentages.

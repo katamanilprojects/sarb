@@ -1,12 +1,12 @@
 # Coding Standards & Conventions
 
-This document establishes the code formatting, documentation, database interaction, and error handling standards used across the project.
+This document establishes the code formatting, documentation, database interaction, transaction/snapshot safety, request security, and cross-portal core parity standards used across the project.
 
 ---
 
-## 1. PHPDoc Method Documentation Standard
+## 1. PHPDoc & Type Safety Standards
 
-All public and protected methods in `*.class.php` models must include comprehensive PHPDoc comments detailing the method's purpose, parameters, return structure, and a brief usage example.
+All public and protected methods in `*.class.php` models must include PHPDoc comments detailing the method's purpose, parameters, return structure, and usage context. All new classes in `core/` and `services/` must declare `declare(strict_types=1);` at the top of the file and use explicit parameter and return type hints.
 
 ```php
 /**
@@ -23,13 +23,6 @@ All public and protected methods in `*.class.php` models must include comprehens
  *     err?: string,
  *     message?: string
  * } Status 1 on success, 0 on validation or database failure
- *
- * @example
- * $admin = new Admin();
- * $res = $admin->addStudent('20011A0501', 'Anil Kumar', 12, '2020-11-01');
- * if ($res['status'] === 1) {
- *     // Success logic
- * }
  */
 public function addStudent($rollno, $name, $class_id, $date_of_joining = null)
 {
@@ -41,7 +34,7 @@ public function addStudent($rollno, $name, $class_id, $date_of_joining = null)
 
 ## 2. Standardized Method Response Structure
 
-Model methods must return a predictable associative array rather than raw booleans or echoing output directly. This decouples business logic from presentation.
+Legacy model methods return a predictable associative array rather than raw booleans or echoing output directly, while `core/` and `services/` classes may use typed return arrays or throw `InvalidArgumentException` / `DomainException` / `RuntimeException` for invalid inputs, violated invariants, or failed database writes.
 
 ### Success Response:
 ```php
@@ -63,20 +56,20 @@ return [
 
 ---
 
-## 3. Database Prepared Statements & SQL Safety
+## 3. Database Prepared Statements & Connection Reuse
 
-All queries accepting user or session input **must** use MySQLi prepared statements. Never concatenate variables directly into SQL strings.
+1. **Single Shared Connection**: Always obtain the database handle via `DBCredentials` (`$this->conn`) or `\College\Connection::get()`, ensuring one connection per request across all models, services, and audit writes.
+2. **Prepared Statements Only**: All queries accepting user or session input **must** use MySQLi prepared statements. Never concatenate variables directly into SQL strings.
 
 ```php
-// Correct
-$stmt = $this->conn->prepare("SELECT id, name FROM faculties WHERE dept_id = ? AND status = ?");
+$stmt = $this->conn->prepare("SELECT id, username, designation FROM faculties WHERE dept_id = ? AND status = ? ORDER BY sort_order ASC, id ASC");
 if (!$stmt) {
     $this->logs->errLog($this->classname . " - prepare failed: " . $this->conn->error);
     return ['status' => 0, 'err' => 'Database error'];
 }
 
-$status = 1;
-$stmt->bind_param("ii", $dept_id, $status);
+$status = '1';
+$stmt->bind_param("is", $dept_id, $status);
 $stmt->execute();
 $result = $stmt->get_result();
 $data = $result->fetch_all(MYSQLI_ASSOC);
@@ -85,47 +78,38 @@ $stmt->close();
 
 ---
 
-## 4. Database Transaction Standards
+## 4. Database Transaction, Snapshot & Audit Standards
 
-Whenever an operation alters multiple tables or multiple rows that must succeed or fail together, wrap the calls inside an atomic transaction:
+Whenever an operation alters multiple tables, mutates existing academic records, or records an audited decision, wrap all data mutations, before/after snapshots (`academic_record_snapshots`), workflow history (`workflow_review_history`), and unified audit logs (`audit_logs`) inside a single atomic transaction:
 
 ```php
-$res = ['status' => 0];
-$myname = $this->classname . " - markAttendance - ";
-
+$this->conn->begin_transaction();
 try {
-    $this->conn->begin_transaction();
+    // 1. Lock target records (FOR UPDATE) and capture before_json state when mutating existing data
+    // 2. Execute domain INSERT / UPDATE / DELETE statements
+    // 3. Record before/after snapshot in academic_record_snapshots (with actor users.id and reason)
+    // 4. Write to unified audit_logs via $this->dbActivityLog(...) and verify it succeeds
+    if (!$this->dbActivityLog((int)$_SESSION['userid'], 'ACTION_CODE', 'Descriptive details', $_SESSION['role'], 'ENTITY_TYPE', (string)$entityId)) {
+        throw new \RuntimeException('Audit log failed');
+    }
 
-    // 1. Insert into diary
-    $stmt1 = $this->conn->prepare("INSERT INTO diary (sub_id, faculty_id, date, hour, diary) VALUES (?, ?, ?, ?, ?)");
-    // ... bind and execute ...
-    $stmt1->close();
-
-    // 2. Insert into attendance
-    $stmt2 = $this->conn->prepare("INSERT INTO attendance (stu_id, sub_id, date, hour, status) VALUES (?, ?, ?, ?, ?)");
-    // ... loop, bind and execute ...
-    $stmt2->close();
-
-    // 3. Activity log
-    $this->dbActivityLog($faculty_id, "Attendance", "Marked for Subj ID: $sub_id", "Faculty");
-
-    // Commit only if all operations succeeded
     $this->conn->commit();
-    $res['status'] = 1;
-} catch (Exception $e) {
+} catch (\Throwable $e) {
     $this->conn->rollback();
-    $this->logs->errLog($myname . "Transaction failed: " . $e->getMessage());
-    $res['err'] = "Failed to mark attendance. Transaction rolled back.";
+    $this->logs->errLog("Transaction failed: " . $e->getMessage());
+    throw $e;
 }
-
-return $res;
 ```
+
+### Key Audit Invariants:
+- Always pass the authenticated `users.id` (`$_SESSION['userid']`)—never `faculties.id` or `students.id`—as the actor identity in `audit_logs`, `academic_record_snapshots`, and `workflow_review_history`.
+- Verify that `dbActivityLog()` returns `true` inside audited transactions so that if the audit write fails, the data mutation rolls back with it.
 
 ---
 
-## 5. Page Controller Security Pattern
+## 5. Page Controller Security, CSRF & Scope Pattern
 
-Each procedural controller page must check session status and authorized role before executing business logic:
+Each procedural controller page must enforce authentication, role authorization, feature/action permissions, CSRF protection, and record scope verification:
 
 ```php
 <?php
@@ -137,9 +121,35 @@ if (empty($_SESSION['user']) || empty($_SESSION['role']) || $_SESSION['role'] !=
     exit();
 }
 
-// 2. Load dependencies
+// 2. Load dependencies (instantiating DBCredentials automatically runs RequestSecurity::guardResources)
 require_once("faculty.class.php");
-$faculty = new Faculty();
+require_once("services/FeatureManager.php");
 
-// 3. Page logic and rendering ...
+// 3. Enforce module visibility and granular action permission ('view', 'edit', 'approve', 'export')
+FeatureManager::requireAccess('MOD_ATTENDANCE');
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    \College\RequestSecurity::requirePostCsrf();
+    FeatureManager::requireAction('MOD_ATTENDANCE', 'edit');
+}
+
+// 4. Verify record ownership scope before operating on subject/class/student IDs
+$faculty = new Faculty();
+if (!empty($_REQUEST['sub_id'])) {
+    $faculty->assertSubjectScope((int)$_REQUEST['sub_id']);
+}
 ```
+
+---
+
+## 6. Shared Trusted Core Synchronization (`core/`)
+
+The 22 foundational classes in `jntuacea/core/` (`namespace College`) are shared with the student portal (`jntuaceastudents/core/`):
+1. Always edit shared core files in `jntuacea/core/` first.
+2. Synchronize and update `core/release.json` across both portals by running:
+   ```bash
+   php tools/sync_core.php
+   ```
+3. Verify byte-for-byte parity across all 22 core files before committing:
+   ```bash
+   php tools/sync_core.php --check
+   ```

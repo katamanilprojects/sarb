@@ -15,8 +15,8 @@ if (empty($_POST['class_id'])) {
 $obj = new HOD();
 $class_id = $_POST['class_id'];
 
-// Fetch students for the selected class
-$studentList = $obj->getStudentsByClass($class_id);
+// Fetch students for the selected class (including inactive/transferred students)
+$studentList = $obj->getStudentsByClass($class_id, true);
 
 ?>
 
@@ -40,20 +40,25 @@ $studentList = $obj->getStudentsByClass($class_id);
                         <th>S.No.</th>
                         <th>Roll Number</th>
                         <th>Student Name</th>
+                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (!empty($studentList)) {
                         $sno = 1;
                         foreach ($studentList as $student) {
+                            $statusBadge = ($student['status'] == 1)
+                                ? '<span class="badge bg-success">Active</span>'
+                                : '<span class="badge bg-secondary">Inactive / Shifted</span>';
                             echo "<tr>
                         <td>" . $sno++ . "</td>
                         <td>{$student['roll_number']}</td>
                         <td>{$student['name']}</td>
+                        <td>{$statusBadge}</td>
                       </tr>";
                         }
                     } else {
-                        echo "<tr><td colspan='5'>No students found in this class.</td></tr>";
+                        echo "<tr><td colspan='4'>No students found in this class.</td></tr>";
                     } ?>
                 </tbody>
             </table>

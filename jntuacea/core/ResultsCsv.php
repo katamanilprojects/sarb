@@ -2,6 +2,8 @@
 declare(strict_types=1);
 namespace College;
 require_once __DIR__.'/AssessmentPolicy.php';
+require_once __DIR__.'/ResultRow.php';
+require_once __DIR__.'/ResultsPolicy.php';
 
 final class ResultsCsv
 {
@@ -38,7 +40,7 @@ final class ResultsCsv
 
         // Comprehensive alias mapping matching resultsold scheme (std_regno, sub_code, im, em, total, result, grade, grade_points, credits)
         $aliases = [
-            'htno'     => ['htno', 'rollno', 'rollnumber', 'hallticket', 'hallticketno', 'hallticketnumber', 'stdregno', 'std_regno', 'regno'],
+            'htno'     => ['htno', 'rollno', 'rollnumber', 'hallticket', 'hallticketno', 'hallticketnumber', 'admissionnumber', 'admissionno', 'studentadmissionnumber', 'stdregno', 'std_regno', 'regno'],
             'subcode'  => ['subcode', 'sub_code', 'subjectcode', 'subject_code', 'coursecode', 'course_code'],
             'internal' => ['internals', 'internalmarks', 'internal', 'internal_marks', 'im', 'cie'],
             'external' => ['externals', 'externalmarks', 'external', 'external_marks', 'em', 'see'],
@@ -52,7 +54,8 @@ final class ResultsCsv
         // Optional columns
         $optionalAliases = [
             'stdname' => ['stdname', 'std_name', 'studentname', 'student_name', 'name'],
-            'subname' => ['subname', 'sub_name', 'subjectname', 'subject_name', 'coursename']
+            'subname' => ['subname', 'sub_name', 'subjectname', 'subject_name', 'coursename'],
+            'internal_max' => ['internalmax'], 'external_max' => ['externalmax']
         ];
 
         $cols = [];
@@ -62,18 +65,16 @@ final class ResultsCsv
         }
 
         foreach ($aliases as $key => $options) {
-            foreach ($options as $option) {
-                $cleanOption = strtolower(preg_replace('/[^a-z0-9]/i', '', $option));
-                $index = array_search($cleanOption, $names, true);
-                if ($index !== false) {
-                    $cols[$key] = $index;
-                    break;
-                }
+            $matches = [];
+            foreach (array_unique(array_map(static fn($v) => strtolower(preg_replace('/[^a-z0-9]/i', '', $v)), $options)) as $option) {
+                $index = array_search($option, $names, true);
+                if ($index !== false) { $matches[] = $index; }
             }
-            if (!isset($cols[$key])) {
+            if (count($matches) !== 1) {
                 fclose($handle);
-                throw new \InvalidArgumentException('CSV is missing required column: ' . $key . ' (expected headers matching ' . implode('/', array_slice($options, 0, 4)) . ')');
+                throw new \InvalidArgumentException(count($matches) ? 'Ambiguous CSV columns for ' . $key : 'CSV is missing required column: ' . $key);
             }
+            $cols[$key] = $matches[0];
         }
 
         // Check optional columns
@@ -95,7 +96,7 @@ final class ResultsCsv
             FROM students st 
             JOIN student_sub ss ON ss.stu_id = st.id 
             JOIN subjects s ON s.id = ss.sub_id 
-            JOIN classes c ON c.id = s.class_id AND c.id = st.class_id 
+            JOIN classes c ON c.id = s.class_id AND c.id = st.class_id
             JOIN specialization sp ON sp.id = c.spec_id 
             LEFT JOIN curriculum_subjects cs ON cs.id = s.curr_sub_id 
                  AND cs.reg_id = c.reg_id 
@@ -115,20 +116,21 @@ final class ResultsCsv
             FROM students st 
             JOIN student_sub ss ON ss.stu_id = st.id 
             JOIN subjects s ON s.id = ss.sub_id 
-            JOIN classes c ON c.id = s.class_id 
+            JOIN classes c ON c.id = s.class_id AND c.id = st.class_id
             JOIN specialization sp ON sp.id = c.spec_id 
             LEFT JOIN curriculum_subjects cs ON cs.id = s.curr_sub_id 
                  AND cs.reg_id = c.reg_id 
-                 AND cs.spec_id = c.spec_id 
+                 AND cs.spec_id = c.spec_id AND cs.yearsem = c.yearsem
             WHERE UPPER(TRIM(st.username)) = ? 
               AND UPPER(TRIM(s.subcode)) = ? 
               AND sp.prog_id = ? 
-              AND c.reg_id = ?
+              AND c.reg_id = ? AND c.yearsem = ?
         ');
 
         $rows = [];
         $errors = [];
         $seen = [];
+        $policies = [];
         $number = 1;
 
         try {
@@ -166,9 +168,9 @@ final class ResultsCsv
                     $match->execute();
                     $matches = $match->get_result()->fetch_all(MYSQLI_ASSOC);
 
-                    if (count($matches) !== 1) {
-                        // Attempt fallback match for supplementary attempts
-                        $matchFallback->bind_param('ssii', $roll, $code, $notification['program_id'], $notification['regulation_id']);
+                    if (!$matches && $notification['exam_type'] !== 'REGULAR') {
+                        // Historical offerings must still match the notification semester.
+                        $matchFallback->bind_param('ssiis', $roll, $code, $notification['program_id'], $notification['regulation_id'], $notification['yearsem']);
                         $matchFallback->execute();
                         $matches = $matchFallback->get_result()->fetch_all(MYSQLI_ASSOC);
                     }
@@ -177,115 +179,13 @@ final class ResultsCsv
                         throw new \DomainException("The student ({$roll}) and course ({$code}) do not resolve to an enrolled offering for this program and regulation.");
                     }
                     $m = $matches[0];
-                    $profile = (new AssessmentPolicy($this->db))->forSubject((int)$m['subject_id'])['config'];
-
-                    // 2. Parse Result Status (accept P, PASS, F, FAIL, AB, ABSENT, MP, MALPRACTICE, W, WITHHELD)
-                    $rawStatus = strtoupper($get('status'));
-                    $status = match($rawStatus) {
-                        'P', 'PASS', 'PASSED'       => 'PASS',
-                        'F', 'FAIL', 'FAILED'       => 'FAIL',
-                        'A', 'AB', 'ABS', 'ABSENT'  => 'ABSENT',
-                        'MP', 'MALPRACTICE'         => 'MALPRACTICE',
-                        'W', 'WH', 'WITHHELD'       => 'WITHHELD',
-                        default => in_array($rawStatus, ['PASS', 'FAIL', 'ABSENT', 'WITHHELD', 'MALPRACTICE'], true)
-                            ? $rawStatus
-                            : throw new \InvalidArgumentException("Invalid result status '{$rawStatus}'. Use P, F, PASS, FAIL, AB, MP, or WITHHELD.")
-                    };
-
-                    // 3. Parse Grade & Grade Points
-                    $rawGrade = strtoupper($get('grade'));
-                    if ($rawGrade === '' || $rawGrade === '-') {
-                        $rawGrade = ($status === 'ABSENT') ? 'AB' : (($status === 'FAIL') ? 'F' : 'P');
-                    }
-                    if (!preg_match('/^[A-Z0-9+_-]{1,6}$/D', $rawGrade)) {
-                        throw new \InvalidArgumentException("Invalid grade '{$rawGrade}'.");
-                    }
-                    $grade = $rawGrade;
-
-                    $pointsRaw = $get('points');
-                    if ($pointsRaw !== '' && $pointsRaw !== '-') {
-                        $points = MarksNormalizer::number($pointsRaw, 'Grade points');
-                    } else {
-                        // Fallback points based on status
-                        $points = in_array($status, ['FAIL', 'ABSENT', 'MALPRACTICE', 'WITHHELD'], true) ? 0.0 : 4.0;
-                    }
-
-                    // 4. Parse Credits (handle fail case where dump credits is 0)
-                    $rawCredits = $get('credits');
-                    $currCredits = ($m['credits'] !== null && (float)$m['credits'] > 0) ? (float)$m['credits'] : null;
-                    if ($rawCredits !== '' && is_numeric($rawCredits)) {
-                        $parsedCredits = (float)$rawCredits;
-                    } else {
-                        $parsedCredits = $currCredits ?? 3.0;
-                    }
-
-                    // If student failed, credits earned is 0, registered is curriculum credits
-                    $creditsReg = $currCredits ?? ($parsedCredits > 0 ? $parsedCredits : 3.0);
-                    $creditsEarned = ($status === 'PASS') ? $creditsReg : 0.0;
-
-                    // 5. Parse Internal (IM), External (EM), and Total marks with resultsold conventions
-                    // -7 = no internal / exempt
-                    // -1 = absent (AB)
-                    // -5 = no external / exempt
-                    $imRaw = $get('internal');
-                    $emRaw = $get('external');
-                    $totRaw = $get('total');
-
-                    $im = null;
-                    if ($imRaw !== '' && $imRaw !== '-' && $imRaw !== '-7' && is_numeric($imRaw)) {
-                        $imVal = (float)$imRaw;
-                        if ($imVal >= 0) {
-                            $im = $imVal;
-                        }
-                    }
-
-                    $em = null;
-                    if ($emRaw === '-1' || $grade === 'AB' || $grade === 'Ab' || $status === 'ABSENT') {
-                        $status = 'ABSENT';
-                        $em = null;
-                    } elseif ($emRaw !== '' && $emRaw !== '-' && $emRaw !== '-5' && is_numeric($emRaw)) {
-                        $emVal = (float)$emRaw;
-                        if ($emVal >= 0) {
-                            $em = $emVal;
-                        }
-                    }
-
-                    $total = null;
-                    if ($totRaw !== '' && $totRaw !== '-' && is_numeric($totRaw)) {
-                        $totVal = (float)$totRaw;
-                        if ($totVal >= 0) {
-                            $total = $totVal;
-                        }
-                    }
-                    if ($total === null && ($im !== null || $em !== null)) {
-                        $total = ($im ?? 0.0) + ($em ?? 0.0);
-                    }
-
-                    // Validate maxima if configured
-                    $internalMax = $profile['internal_max'] ?? ($m['cie_max_marks'] !== null ? (float)$m['cie_max_marks'] : 30.0);
-                    $externalMax = $profile['net_max'] ?? ($m['see_max_marks'] !== null ? (float)$m['see_max_marks'] : 70.0);
-
-                    // Check column override for maxima if present
-                    foreach (['internalmax' => &$internalMax, 'externalmax' => &$externalMax] as $colName => &$maxVar) {
-                        $idx = array_search($colName, $names, true);
-                        if ($idx !== false && trim((string)$cells[$idx]) !== '') {
-                            $upMax = MarksNormalizer::number($cells[$idx], $colName);
-                            $maxVar = $upMax;
-                        }
-                    }
-                    unset($maxVar);
-
-                    if ($im !== null && $im > $internalMax) {
-                        throw new \InvalidArgumentException("Internal marks ({$im}) exceed configured maximum ({$internalMax}).");
-                    }
-                    if ($em !== null && $em > $externalMax) {
-                        throw new \InvalidArgumentException("External marks ({$em}) exceed configured maximum ({$externalMax}).");
-                    }
-
-                    // Validate total if both IM and EM are present and non-zero
-                    if ($total !== null && $im !== null && $em !== null && abs($total - ($im + $em)) > 0.5) {
-                        throw new \InvalidArgumentException("Total ({$total}) does not equal internal ({$im}) plus external ({$em}).");
-                    }
+                    $profile = $policies[(int)$m['subject_id']] ??= (new ResultsPolicy($this->db))->forSubject((int)$m['subject_id'])['config'];
+                    $input = [];
+                    foreach (array_keys($aliases) as $field) { $input[$field] = $get($field); }
+                    $input['internal_max'] = $getOpt('internal_max');
+                    $input['external_max'] = $getOpt('external_max');
+                    $normalized = ResultRow::normalize($input, $m, $profile);
+                    $policies[(int)$m['subject_id']] = $profile;
 
                     // Subject name
                     $subjectName = $getOpt('subname');
@@ -299,15 +199,7 @@ final class ResultsCsv
                         'student_id'         => (int)$m['student_id'],
                         'subject_id'         => (int)$m['subject_id'],
                         'subject_name'       => $subjectName,
-                        'internal_marks'     => $im,
-                        'external_marks'     => $em,
-                        'total_marks'        => $total,
-                        'grade_letter'       => $grade,
-                        'grade_points'       => $points,
-                        'credits_registered' => (float)$creditsReg,
-                        'credits_earned'     => (float)$creditsEarned,
-                        'result_status'      => $status
-                    ];
+                    ] + $normalized;
                 } catch (\DomainException | \InvalidArgumentException $e) {
                     $errors[] = 'Row ' . $number . ': ' . $e->getMessage();
                 }
@@ -324,7 +216,8 @@ final class ResultsCsv
             'status'      => $errors ? 0 : 1,
             'rows'        => $rows,
             'errors'      => $errors,
-            'source_hash' => hash_file('sha256', $path)
+            'source_hash' => hash_file('sha256', $path),
+            'validation_hash' => hash('sha256', json_encode([$notification, $policies, $rows], JSON_THROW_ON_ERROR))
         ];
     }
 }

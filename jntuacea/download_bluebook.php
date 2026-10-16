@@ -41,7 +41,7 @@ if (php_sapi_name() === 'cli') {
         die("Invalid Request");
     }
 
-    $facid = !empty($_SESSION['facid']) ? $_SESSION['facid'] : (!empty($_POST['facid']) ? $_POST['facid'] : (!empty($_GET['facid']) ? $_GET['facid'] : null));
+    $facid = !empty($_POST['facid']) ? $_POST['facid'] : (!empty($_GET['facid']) ? $_GET['facid'] : (!empty($_SESSION['facid']) ? $_SESSION['facid'] : null));
     $start_date = !empty($_POST['start_date']) ? $_POST['start_date'] : (!empty($_GET['start_date']) ? $_GET['start_date'] : null);
     $end_date = !empty($_POST['end_date']) ? $_POST['end_date'] : (!empty($_GET['end_date']) ? $_GET['end_date'] : null);
 }

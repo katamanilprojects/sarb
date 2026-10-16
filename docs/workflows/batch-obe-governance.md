@@ -140,11 +140,12 @@ $$\text{PO Attainment} = (0.80 \times \text{Direct Attainment}) + (0.20 \times \
 ### 5.2 Service Method: `BatchOBEService::computePOPSOArticulationMatrix()`
 Implemented in `services/BatchOBEService.php`:
 ```php
-public function computePOPSOArticulationMatrix(int $deptId, int $batchId): array
+public function computePOPSOArticulationMatrix(int $batchId, int $programId, ?int $departmentId = null): array
 ```
+- Validates explicit `batchId`, `programId`, and `departmentId` scope (never inferring programme context implicitly).
 - Fetches all courses registered for the batch cohort with their corresponding CO-PO mapping vectors.
-- Calculates direct PO/PSO averages across all academic semesters.
-- Ingests exit survey records for graduating students belonging to the batch.
+- Calculates direct PO/PSO averages strictly from real recorded assessment evidence across academic semesters (no simulated or synthetic fallback scores are generated; unmeasured indirect or PEO metrics explicitly report `Unavailable`).
+- Ingests exit survey records from `student_ces_feedback` when available for the cohort.
 - Produces the NBA Table 3.2 Course-PO matrix and Table 3.3.2 Final PO/PSO Attainment summary.
 - Rendered in `views/popso_department_tab.php` and toggle-guarded by `FeatureManager::isModuleEnabled('MOD_PO_PSO_ATTAINMENT')`.
 
@@ -155,19 +156,20 @@ public function computePOPSOArticulationMatrix(int $deptId, int $batchId): array
 For academic governance and institutional quality monitoring, `superadminbatchobe.php` provides longitudinal trajectory analytics tracking multiple successive graduating batches.
 
 ### 6.1 Multi-Cohort Trajectory Model
-- **Endpoint**: `superadminbatchobe.php?view=longitudinal&regulation_id=X&dept_id=Y`
-- **Method**: `BatchOBEService::getLongitudinalCohortAnalytics(int $deptId, int $regulationId): array`
+- **Endpoint**: `superadminbatchobe.php`
+- **Method**: `BatchOBEService::getLongitudinalCohortAnalytics(int $deptId): array`
 - **Analytics Captured**:
-  1. **Cohort-over-Cohort PO/PSO Trends**: Direct comparison of final PO1–PO12 attainment percentages across 3+ consecutive batches (e.g., 2020–2024 vs. 2021–2025 vs. 2022–2026).
-  2. **PEO Fulfillment Evolution**: Tracks progression of graduate attributes into professional career milestones.
+  1. **Cohort-over-Cohort PO/PSO Trends**: Direct comparison of measured PO1–PO12 attainment across consecutive batches for the department.
+  2. **Evidence Integrity**: Only cohorts with actual recorded course assessment evidence are plotted; unavailable longitudinal or indirect PEO metrics remain explicitly marked as unavailable rather than simulated.
   3. **Continuous Improvement Identification**: Highlights outcomes exhibiting positive growth vs. persistent dips requiring Board of Studies curriculum intervention.
 
 ---
 
 ## 7. Feature Toggle Governance
 
-| Module Code | Friendly Name | Default Status | Target Interfaces |
-| :--- | :--- | :--- | :--- |
-| `MOD_BATCH_OBE` | Batch-Centric OBE Governance | Enabled (`1`) | `superadminbatchobe.php`, `superadminbatches.php` |
-| `MOD_PO_PSO_ATTAINMENT` | PO/PSO Program Articulation Matrix | Enabled (`1`) | `views/popso_department_tab.php`, `superadminbatchobe.php` |
+| Module Code | Friendly Name | Target Interfaces |
+| :--- | :--- | :--- |
+| `MOD_BATCH_GOVERNANCE` | Batch-Centric Governance, Vision/Mission, PEOs & Macro-Attainment | `superadminbatches.php`, `superadminbatchobe.php` |
+| `MOD_BATCH_OBE` | Multi-Batch Longitudinal OBE Analytics & Cohort Trajectory Radar Charts | `superadminbatchobe.php` |
+| `MOD_PO_PSO_ATTAINMENT` | PO/PSO Program Articulation Matrix (NBA Tables 3.2 & 3.3.2) | `views/popso_department_tab.php`, `superadminbatchobe.php` |
 

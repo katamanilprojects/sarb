@@ -86,3 +86,8 @@ tmp/
 *_manual_*.pdf
 fac_user_manual*.pdf
 hod_manual*.pdf
+
+# Access rules for runtime academic evidence
+!*/uploads/.htaccess
+!*/uploads/tmp/
+!*/uploads/tmp/.htaccess

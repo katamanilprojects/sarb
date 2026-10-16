@@ -26,11 +26,13 @@ if (empty($_POST["subcode"]) || empty($_POST["sub_fullname"]) || empty($_POST["s
     exit();
 }
 
-if (!$studentRepo->verifyClassEnrollment((int)$_POST['student_id'], (int)$_POST['class_id']) || !$studentRepo->verifySubjectEnrollment((int)$_POST['student_id'], (int)$_POST['subject_id'])) {
+if (!$studentRepo->verifyClassEnrollment((int)$_POST['student_id'], (int)$_POST['class_id'], false) || !$studentRepo->verifySubjectEnrollment((int)$_POST['student_id'], (int)$_POST['subject_id'])) {
     header('Location: ./studenthome.php');
     exit();
 }
 $classid_validation = 1;
+$studentClassStatus = $studentRepo->getStudentClassStatus((int)$_POST['student_id'], (int)$_POST['class_id']);
+$isInactiveInClass = ($studentClassStatus === 0);
 
 $page_title = "Student Dashboard";
 require_once("stheader.php");
@@ -49,7 +51,12 @@ $courseOutcomes = $assessmentService->getCOsBySubjectId($_POST['subject_id']);
     <div class="card shadow-lg">
         <div class="card-header">
             <div class="float-start">
-                <h6 class="mb-0"><?= htmlspecialchars($_POST['classname']); ?></h6>
+                <h6 class="mb-0">
+                    <?= htmlspecialchars($_POST['classname']); ?>
+                    <?php if ($isInactiveInClass): ?>
+                        <span class="badge bg-secondary ms-2">Inactive / Transferred</span>
+                    <?php endif; ?>
+                </h6>
                 <small>Academic Year: <?= htmlspecialchars($_POST['acad_year']); ?></small>
             </div>
             <div class="float-end">
@@ -60,6 +67,11 @@ $courseOutcomes = $assessmentService->getCOsBySubjectId($_POST['subject_id']);
             <?= htmlspecialchars($_POST['subcode']); ?> <br> <?= htmlspecialchars($_POST['sub_fullname']); ?>
         </div>
         <div class="card-body">
+            <?php if ($isInactiveInClass): ?>
+                <div class="alert alert-secondary py-2 mb-3">
+                    <i class="bi bi-info-circle me-1"></i><strong>Note:</strong> You are currently marked inactive in this class section (e.g. transferred or shifted mid-semester). Displaying past attendance records accrued during your active enrollment.
+                </div>
+            <?php endif; ?>
             <?php if (\FeatureManager::isStudentVisible('MOD_ATTENDANCE')): ?>
                 <?php if (!empty($attendanceData)): ?>
                     <table class="table table-bordered table-striped">
