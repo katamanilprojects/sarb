@@ -358,6 +358,7 @@ require_once("facheader.php"); // Make sure path is correct
     <?php if ($selected_sub_id && $selected_assessment_number): ?>
 
         <?php 
+        $is_faculty_cia_report = true;
         require_once("ciaanalysis2_common_chart.php");
         echo renderAnalysisAssets(); // Include necessary JS libraries and global scripts
         echo renderAnalysisScripts($selected_sub_id, $selected_assessment_number); // Include the analysis scripts

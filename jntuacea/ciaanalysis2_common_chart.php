@@ -252,6 +252,82 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <?php
+                            $isFacultyReport = (!empty($is_faculty_cia_report) || basename($_SERVER['SCRIPT_NAME'] ?? '') === 'facciaanalysis2.php');
+                            if ($isFacultyReport):
+                            ?>
+                            <!-- Zero Marks Executive Overview & Graphical Analysis -->
+                            <div class="col-md-12 mb-4" id="zeroMarksSectionCard">
+                                <div class="card h-100 shadow-sm">
+                                    <div class="card-body">
+                                        <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+                                            <h5 class="card-title mb-1">Zero Marks Analysis</h5>
+                                            <span class="badge bg-secondary-subtle text-secondary border small">Faculty Executive Diagnostic</span>
+                                        </div>
+                                        <p class="card-text small text-muted mb-2">
+                                            <i>Purpose:</i> Visual overview of recorded zero marks across questions and Course Outcomes (COs) for the selected CIA assessment scope.<br>
+                                            <i>Benefit:</i> Pinpoints questions and learning outcomes with high non-attempt or zero-score rates to target academic support.
+                                        </p>
+                                        
+                                        <!-- Faculty-facing Explanation Callout -->
+                                        <div class="alert alert-light border small text-muted my-3 py-2 px-3">
+                                            <strong>About recorded zeros:</strong> This count shows recorded zeros. A student may have not attempted the question or may have secured zero. The recorded mark alone cannot distinguish between the two. Historical zeros may also include placeholders or values saved as zero by older imports. A student may appear in more than one CO row if they have recorded zeros across questions mapped to different COs. Zero total across mapped questions reflects evaluated students whose earned sum across mapped CIA questions is zero.
+                                        </div>
+
+                                        <!-- Executive KPI Summary Cards -->
+                                        <div id="zeroMarksKpiCards" class="row g-2 mb-4">
+                                            <div class="col-12 text-center py-2 text-muted small">Loading summary metrics...</div>
+                                        </div>
+
+                                        <!-- Visual Graphs Row -->
+                                        <div id="zeroMarksChartsRow" class="row mb-4">
+                                            <div class="col-lg-7 mb-3">
+                                                <div class="border rounded p-3 h-100 bg-white shadow-xs">
+                                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                                        <h6 class="fw-bold mb-0 text-dark">Question Zero-Marks Distribution</h6>
+                                                        <span class="badge bg-light text-muted border small">Evaluated vs. Recorded Zeros</span>
+                                                    </div>
+                                                    <p class="small text-muted mb-2">
+                                                        Shows recorded zeros among recorded scores. Choice questions with unknown selection applicability are distinguished.
+                                                    </p>
+                                                    <div class="chart-container" style="min-height: 270px;">
+                                                        <canvas id="zeroMarksQuestionChart"></canvas>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-5 mb-3">
+                                                <div class="border rounded p-3 h-100 bg-white shadow-xs">
+                                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                                        <h6 class="fw-bold mb-0 text-dark">Course Outcome (CO) Impact</h6>
+                                                        <span class="badge bg-light text-muted border small">Distinct Students</span>
+                                                    </div>
+                                                    <p class="small text-muted mb-2">
+                                                        Students with a recorded zero on at least one mapped question per CO.
+                                                    </p>
+                                                    <div class="chart-container" style="min-height: 270px;">
+                                                        <canvas id="zeroMarksCoChart"></canvas>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Course Outcome (CO) Summary -->
+                                        <div class="mt-3 pt-3 border-top">
+                                            <h6 class="fw-bold mb-1">Course Outcome (CO) Summary</h6>
+                                            <p class="small text-muted mb-2">
+                                                Students with a recorded zero on at least one mapped question. Each student is counted once per CO in the selected scope.
+                                            </p>
+                                            <div id="zeroMarksCoSummaryContainer" class="table-responsive">
+                                                <p class="text-muted small">Loading CO summary...</p>
+                                            </div>
+                                        </div>
+
+                                        <div id="zeroMarksSuggestions" class="suggestions mt-2 alert alert-info small" style="display:none;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -296,15 +372,13 @@
                     <a href="download_feedback_enhanced.php?format=pdf&level=subject&sub_id=<?php echo htmlspecialchars($selected_sub_id); ?>" target="_blank" class="btn btn-outline-primary btn-sm">
                         <i class="bi bi-chat-square-quote me-1"></i> Feedback Report
                     </a>
-                    <?php if ($hasSeeMarks): ?>
                     <a href="download_obe_analysis.php?sub_id=<?php echo htmlspecialchars($selected_sub_id); ?>" target="_blank" class="btn btn-danger btn-sm shadow-sm">
-                        <i class="bi bi-file-earmark-bar-graph me-1"></i> OBE Analytics Dossier
+                        <i class="bi bi-file-earmark-bar-graph me-1"></i> OBE Analytics Dossier <?php echo $hasSeeMarks ? '' : '<span class="badge bg-warning text-dark ms-1" style="font-size:0.7em;">CIA Stage</span>'; ?>
                     </a>
-                    <?php if (\FeatureManager::isFacultyVisible('MOD_SAR_FORM_C3')): ?>
+                    <?php if ($hasSeeMarks && \FeatureManager::isFacultyVisible('MOD_SAR_FORM_C3')): ?>
                     <a href="download_obe_analysis.php?action=sar_form_c3&sub_id=<?php echo htmlspecialchars($selected_sub_id); ?>" target="_blank" class="btn btn-warning btn-sm shadow-sm text-dark">
                         <i class="bi bi-file-earmark-ruled me-1"></i> NBA SAR Form C-3
                     </a>
-                    <?php endif; ?>
                     <?php endif; ?>
                     <a href="download_bluebook.php?sub_id=<?php echo htmlspecialchars($selected_sub_id); ?>" target="_blank" class="btn btn-success btn-sm shadow-sm">
                         <i class="bi bi-file-earmark-pdf me-1"></i> e-Bluebook Course File

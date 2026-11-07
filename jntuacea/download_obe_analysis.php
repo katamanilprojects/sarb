@@ -32,8 +32,9 @@ if (php_sapi_name() !== 'cli') {
     }
 }
 
+$raw_sub_id = '';
 if (php_sapi_name() === 'cli') {
-    $sub_id = !empty($argv[1]) ? intval($argv[1]) : 656;
+    $raw_sub_id = !empty($argv[1]) ? (string)$argv[1] : '656';
     if (!empty($argv[2])) {
         $requestedAction = $argv[2];
     }
@@ -46,35 +47,50 @@ if (php_sapi_name() === 'cli') {
             die("Invalid Request: Secret code mismatch.");
         }
     }
-    $sub_id = intval($_POST['sub_id']);
+    $raw_sub_id = trim($_POST['sub_id']);
 } elseif ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['sub_id'])) {
     if (!$is_auth) {
         http_response_code(403);
         die("Access Denied: Authentication required.");
     }
-    $sub_id = intval($_GET['sub_id']);
+    $raw_sub_id = trim($_GET['sub_id']);
 } else {
     die("Invalid Request.");
 }
 
-// Faculty access control: ensure faculty teaches this subject
+if (!preg_match('/^[0-9]+(,[0-9]+)*$/', $raw_sub_id)) {
+    http_response_code(400);
+    die("Invalid Request: Valid Subject ID is required.");
+}
+
+$input_sub_ids = array_map('intval', explode(',', $raw_sub_id));
+$sub_id = $input_sub_ids[0];
+
+// Faculty access control: ensure faculty teaches this subject (or all selected subject IDs)
 if (!empty($userFacId) && ($_SESSION['role'] ?? '') === 'faculty') {
     require_once __DIR__ . '/faculty.class.php';
     $facultyObj = new Faculty();
     $facultySubjects = $facultyObj->getSubjectsByFacultyId($userFacId);
     $allowedSubIds = array_column($facultySubjects['data'] ?? [], 'id');
-    if (!in_array($sub_id, $allowedSubIds)) {
-        http_response_code(403);
-        die("Access Denied: You are not assigned to this subject.");
+    foreach ($input_sub_ids as $chkId) {
+        if (!in_array($chkId, $allowedSubIds)) {
+            http_response_code(403);
+            die("Access Denied: You are not assigned to this subject.");
+        }
     }
 }
 
-// Ensure SEE marks are added before allowing download
-require_once __DIR__ . '/seeassessment.class.php';
-$seeObj = new SEEAssessment();
-if (!$seeObj->isSEEMarksSubmitted($sub_id)) {
-    http_response_code(400);
-    die("Access Denied: Semester End Examination (SEE) marks must be added to this course before the OBE Analytics Dossier can be downloaded.");
+// For SAR Form C-3, ensure SEE marks are added because SAR Form C-3 requires final comprehensive attainment.
+// For the OBE Analytics Dossier and Zero Marks report, the dossier is progressive:
+// mid-semester (when SEE is pending), it generates the provisional CIA analytics dossier (including Zero Marks);
+// end-of-semester (when SEE marks are added), it generates the full 10-page comprehensive dossier.
+if ($requestedAction === 'sar_form_c3') {
+    require_once __DIR__ . '/seeassessment.class.php';
+    $seeObj = new SEEAssessment();
+    if (!$seeObj->isSEEMarksSubmitted($sub_id)) {
+        http_response_code(400);
+        die("Access Denied: Semester End Examination (SEE) marks must be added to this course before NBA SAR Form C-3 can be generated.");
+    }
 }
 
 require_once __DIR__ . '/services/OBEAnalysisPDFService.php';

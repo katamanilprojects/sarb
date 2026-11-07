@@ -421,6 +421,298 @@ function renderAnalysisScripts($selected_sub_id, $selected_assessment_number) {
                         });
                 }
 
+                function loadZeroMarksAnalysis() {
+                    const sectionCard = $('#zeroMarksSectionCard');
+                    const kpiContainer = $('#zeroMarksKpiCards');
+                    const chartsRow = $('#zeroMarksChartsRow');
+                    const coContainer = $('#zeroMarksCoSummaryContainer');
+                    const suggContainer = $('#zeroMarksSuggestions');
+
+                    if (!sectionCard.length) return;
+
+                    $.getJSON(`facciaanalysis2.class.php?action=zero_marks&sub_id=${SUB_ID}&assessment_number=${ASSESSMENT_NUMBER}&_=${Date.now()}`)
+                        .done(function(response) {
+                            if (!response || !response.question_level_available || !response.data || !response.data.questions || response.data.questions.length === 0) {
+                                const msg = (response && response.message) ? response.message : 'Question-level marks unavailable.';
+                                const emptyHtml = `
+                                    <div class="col-12">
+                                        <div class="alert alert-warning text-center my-3 p-3 shadow-sm rounded">
+                                            <i class="bi bi-exclamation-circle me-1"></i> <strong>Question-level marks unavailable.</strong>
+                                            <div class="small text-muted mt-1">${msg}</div>
+                                        </div>
+                                    </div>
+                                `;
+                                kpiContainer.html(emptyHtml);
+                                chartsRow.hide();
+                                coContainer.html('<p class="text-muted small fst-italic">Question-level marks unavailable.</p>');
+                                return;
+                            }
+
+                            const data = response.data;
+                            const isOverall = data.is_overall;
+                            const summary = data.summary || {};
+                            chartsRow.show();
+
+                            // 1. Render Executive KPI Summary Cards
+                            let kpiHtml = `
+                                <div class="col-md-3 col-6">
+                                    <div class="p-2 border rounded bg-light text-center">
+                                        <div class="text-muted small">Questions in Scope</div>
+                                        <div class="fs-4 fw-bold text-dark">${summary.total_questions || data.questions.length}</div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">${summary.choice_questions_count ? summary.choice_questions_count + ' with choice options' : 'Compulsory questions'}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-6">
+                                    <div class="p-2 border rounded bg-light text-center">
+                                        <div class="text-muted small">Questions with Zeros</div>
+                                        <div class="fs-4 fw-bold ${(summary.questions_with_zeros > 0) ? 'text-danger' : 'text-success'}">${summary.questions_with_zeros || 0}</div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">Not attempted or secured zero</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-6">
+                                    <div class="p-2 border rounded bg-light text-center">
+                                        <div class="text-muted small">Students with &ge; 1 Zero</div>
+                                        <div class="fs-4 fw-bold ${(summary.total_distinct_students_with_zeros > 0) ? 'text-danger' : 'text-success'}">${summary.total_distinct_students_with_zeros || 0}</div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">Distinct across all questions</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-6">
+                                    <div class="p-2 border rounded bg-light text-center">
+                                        <div class="text-muted small">COs Impacted</div>
+                                        <div class="fs-4 fw-bold ${(summary.cos_with_zeros > 0) ? 'text-warning text-dark' : 'text-success'}">${summary.cos_with_zeros || 0} <span class="fs-6 fw-normal text-muted">/ ${summary.total_cos || (data.co_summary ? data.co_summary.length : 0)}</span></div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">Course Outcomes with zeros</div>
+                                    </div>
+                                </div>
+                            `;
+                            kpiContainer.html(kpiHtml);
+
+                            // 2. Render Chart 1: Question Zero-Marks Distribution
+                            const qCanvasId = 'zeroMarksQuestionChart';
+                            if (chartInstances[qCanvasId]) {
+                                chartInstances[qCanvasId].destroy();
+                            }
+
+                            const qLabels = data.questions.map(q => {
+                                let prefix = isOverall ? `${q.assessment_label}: ` : '';
+                                let label = `${prefix}${q.question_label}`;
+                                return q.is_choice ? `${label}*` : label;
+                            });
+                            const qRecordedScores = data.questions.map(q => q.recorded_scores_count);
+                            const qZeroScores = data.questions.map(q => q.zero_scores_count);
+                            const qZeroColors = data.questions.map(q => q.is_choice ? 'rgba(255, 193, 7, 0.75)' : 'rgba(220, 53, 69, 0.75)');
+                            const qZeroBorderColors = data.questions.map(q => q.is_choice ? 'rgb(255, 193, 7)' : 'rgb(220, 53, 69)');
+
+                            const qCtx = document.getElementById(qCanvasId);
+                            if (qCtx) {
+                                chartInstances[qCanvasId] = new Chart(qCtx, {
+                                    type: 'bar',
+                                    data: {
+                                        labels: qLabels,
+                                        datasets: [
+                                            {
+                                                label: 'Students with Recorded Score',
+                                                data: qRecordedScores,
+                                                backgroundColor: 'rgba(54, 162, 235, 0.55)',
+                                                borderColor: 'rgb(54, 162, 235)',
+                                                borderWidth: 1
+                                            },
+                                            {
+                                                label: 'Not Attempted or Secured Zero',
+                                                data: qZeroScores,
+                                                backgroundColor: qZeroColors,
+                                                borderColor: qZeroBorderColors,
+                                                borderWidth: 1
+                                            }
+                                        ]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: {
+                                                position: 'top',
+                                                labels: { boxWidth: 14 }
+                                            },
+                                            tooltip: {
+                                                callbacks: {
+                                                    afterLabel: function(context) {
+                                                        const qIdx = context.dataIndex;
+                                                        const qObj = data.questions[qIdx];
+                                                        if (context.datasetIndex === 1) {
+                                                            if (qObj.is_choice) {
+                                                                return 'Choice applicability unknown (*)';
+                                                            } else if (qObj.rate_percentage !== null) {
+                                                                return `${qObj.rate_percentage}% recorded zeros among recorded scores`;
+                                                            }
+                                                        }
+                                                        return '';
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        scales: {
+                                            y: {
+                                                beginAtZero: true,
+                                                ticks: { precision: 0 }
+                                            },
+                                            x: {
+                                                grid: { display: false }
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+
+                            // 3. Render Chart 2: Course Outcome (CO) Impact
+                            const coCanvasId = 'zeroMarksCoChart';
+                            if (chartInstances[coCanvasId]) {
+                                chartInstances[coCanvasId].destroy();
+                            }
+
+                            const coLabels = (data.co_summary || []).map(co => co.co_label);
+                            const coZeroCounts = (data.co_summary || []).map(co => co.has_mapped_evidence ? (co.zero_students_count || 0) : 0);
+                            const coColors = (data.co_summary || []).map(co => {
+                                if (!co.has_mapped_evidence) return 'rgba(108, 117, 125, 0.3)';
+                                return co.zero_students_count > 0 ? 'rgba(253, 126, 20, 0.75)' : 'rgba(25, 135, 84, 0.75)';
+                            });
+                            const coBorderColors = (data.co_summary || []).map(co => {
+                                if (!co.has_mapped_evidence) return 'rgb(108, 117, 125)';
+                                return co.zero_students_count > 0 ? 'rgb(253, 126, 20)' : 'rgb(25, 135, 84)';
+                            });
+
+                            const coCtx = document.getElementById(coCanvasId);
+                            if (coCtx) {
+                                chartInstances[coCanvasId] = new Chart(coCtx, {
+                                    type: 'bar',
+                                    data: {
+                                        labels: coLabels,
+                                        datasets: [{
+                                            label: 'Students with Recorded Zero on Mapped Question(s)',
+                                            data: coZeroCounts,
+                                            backgroundColor: coColors,
+                                            borderColor: coBorderColors,
+                                            borderWidth: 1
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: {
+                                                display: false
+                                            },
+                                            tooltip: {
+                                                callbacks: {
+                                                    label: function(context) {
+                                                        const coIdx = context.dataIndex;
+                                                        const coObj = data.co_summary[coIdx];
+                                                        if (!coObj.has_mapped_evidence) {
+                                                            return 'No mapped question evidence';
+                                                        }
+                                                        return `${coObj.zero_students_count} distinct student(s) with recorded zero`;
+                                                    },
+                                                    afterLabel: function(context) {
+                                                        const coIdx = context.dataIndex;
+                                                        const coObj = data.co_summary[coIdx];
+                                                        if (coObj && coObj.limitation_note) {
+                                                            return coObj.limitation_note;
+                                                        }
+                                                        return '';
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        scales: {
+                                            y: {
+                                                beginAtZero: true,
+                                                ticks: { precision: 0 }
+                                            },
+                                            x: {
+                                                grid: { display: false }
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+
+                            // 4. Render Course Outcome (CO) Summary Matrix Table
+                            let coHtml = '<table class="table table-bordered table-striped table-sm align-middle mb-0">';
+                            coHtml += '<thead><tr class="table-light"><th>CO</th><th>Description</th><th>Mapped Questions (CIA)</th>';
+                            coHtml += '<th class="text-center">Recorded zero on &ge; 1 question (CIA)</th>';
+                            coHtml += '<th class="text-center">Zero total across mapped questions (CIA)</th>';
+                            coHtml += '<th class="text-center">Semester End (SEE) Status</th>';
+                            coHtml += '<th>Limitation / Note</th></tr></thead><tbody>';
+
+                            if (!data.co_summary || data.co_summary.length === 0) {
+                                coHtml += '<tr><td colspan="7" class="text-center text-muted py-3">No Course Outcomes defined for this course.</td></tr>';
+                            } else {
+                                data.co_summary.forEach(co => {
+                                    coHtml += '<tr>';
+                                    coHtml += `<td><strong>${co.co_label}</strong></td>`;
+                                    coHtml += `<td><small class="text-muted">${co.co_description || '—'}</small></td>`;
+
+                                    let seeBadge = (co.see_status === 'SEE Marks Submitted')
+                                        ? '<span class="badge bg-success-subtle text-success border border-success-subtle">SEE Submitted</span>'
+                                        : '<span class="badge bg-secondary-subtle text-secondary border">Pending SEE Marks</span>';
+
+                                    if (!co.has_mapped_evidence) {
+                                        coHtml += '<td class="text-muted small fst-italic">No mapped questions</td>';
+                                        coHtml += '<td class="text-center text-muted small fst-italic">No mapped question evidence</td>';
+                                        coHtml += '<td class="text-center text-muted small fst-italic">No mapped question evidence</td>';
+                                        coHtml += `<td class="text-center">${seeBadge}</td>`;
+                                        coHtml += `<td class="text-muted small fst-italic">${co.limitation_note || 'Not assessed in current CIA scope'}</td>`;
+                                    } else {
+                                        let qList = (co.mapped_questions && co.mapped_questions.length > 0)
+                                            ? co.mapped_questions.map(q => `<span class="badge bg-light text-dark border me-1 mb-1">${q}</span>`).join('')
+                                            : '<span class="text-muted small">—</span>';
+                                        coHtml += `<td>${qList}</td>`;
+
+                                        let countDisplay = '';
+                                        if (co.zero_students_count === 0) {
+                                            countDisplay = '<span class="badge bg-success-subtle text-success border border-success-subtle">0 students</span>';
+                                        } else {
+                                            countDisplay = `<span class="badge bg-danger">${co.zero_students_count} student${co.zero_students_count > 1 ? 's' : ''}</span>`;
+                                        }
+                                        coHtml += `<td class="text-center">${countDisplay}</td>`;
+
+                                        let totalZeroDisplay = '';
+                                        if (co.zero_total_count === 0) {
+                                            totalZeroDisplay = '<span class="badge bg-success-subtle text-success border border-success-subtle">0 students</span>';
+                                        } else {
+                                            totalZeroDisplay = `<span class="badge bg-danger">${co.zero_total_count} student${co.zero_total_count > 1 ? 's' : ''}</span>`;
+                                        }
+                                        coHtml += `<td class="text-center">${totalZeroDisplay}</td>`;
+
+                                        coHtml += `<td class="text-center">${seeBadge}</td>`;
+
+                                        let notes = [];
+                                        if (co.limitation_note) {
+                                            notes.push(co.limitation_note);
+                                        }
+                                        notes.push('Recorded mark alone cannot distinguish attempt reason.');
+                                        coHtml += `<td><small class="text-muted">${notes.join(' ')}</small></td>`;
+                                    }
+                                    coHtml += '</tr>';
+                                });
+                            }
+
+                            coHtml += '</tbody></table>';
+                            coContainer.html(coHtml);
+                        })
+                        .fail(function(jqxhr, textStatus, error) {
+                            const errHtml = `
+                                <div class="col-12">
+                                    <div class="alert alert-danger text-center my-3 p-3">
+                                        <i class="bi bi-exclamation-triangle me-1"></i> Unable to load Zero Marks analysis at this moment. Please retry.
+                                    </div>
+                                </div>
+                            `;
+                            kpiContainer.html(errHtml);
+                            chartsRow.hide();
+                            coContainer.html(errHtml);
+                        });
+                }
+
                 function loadAssessmentSnapshot() {
                     const canvasId = 'assessmentChart';
                     const widgetId = 'assessmentStatWidget';
@@ -969,6 +1261,9 @@ function renderAnalysisScripts($selected_sub_id, $selected_assessment_number) {
                     } else if (targetPaneId === '#advanced-tab-pane') {
                         loadCOSpreadChart();
                         loadQuestionDifficultyTable();
+                        if ($('#zeroMarksSectionCard').length) {
+                            loadZeroMarksAnalysis();
+                        }
                     }
                 }
 

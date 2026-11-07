@@ -78,7 +78,9 @@ class OBEAnalysisPDFService
     }
 
     /**
-     * Main entry point to generate the 9-page OBE Analysis Dossier PDF
+     * Main entry point to generate the progressive OBE Analysis Dossier PDF
+     * - Mid-Semester (CIA Stage): Generates 5 Pages (CIA-1, CIA-2, Consolidated CIA, Learning Analytics, Zero Marks)
+     * - End-of-Semester (Complete): Generates 10 Pages (Full CIA + SEE analysis + Attainment matrices)
      * 
      * @param int|array $courseData Subject ID or array containing course metadata
      * @param array|null $feedbackData Optional external feedback data
@@ -92,10 +94,8 @@ class OBEAnalysisPDFService
             throw new InvalidArgumentException("Invalid subject ID provided for OBE Analysis Report.");
         }
 
-        // Validate that SEE marks are submitted for this course
-        if (!$this->seeObj->isSEEMarksSubmitted($sub_id)) {
-            throw new RuntimeException("OBE Analytics Dossier cannot be generated because Semester End Examination (SEE) marks have not been added yet for this course.");
-        }
+        // Check whether SEE marks are submitted for this course (enables progressive generation)
+        $hasSee = $this->seeObj->isSEEMarksSubmitted($sub_id);
 
         // Fetch course and faculty details
         $facid = $options['facid'] ?? null;
@@ -111,12 +111,19 @@ class OBEAnalysisPDFService
         $this->facultyObj->assertSubjectScope($sub_id);
         $regulation = $this->facultyObj->getRegulationIdForSubject($sub_id);
 
-        // Academic settings & weights
-        $w_cia = $this->requiredPolicySetting('attainment_direct_cia_weight', $regulation);
-        $w_see = $this->requiredPolicySetting('attainment_direct_see_weight', $regulation);
-        $w_direct = $this->requiredPolicySetting('overall_direct_weight', $regulation);
-        $w_indirect = $this->requiredPolicySetting('overall_indirect_weight', $regulation);
-        $targetThreshold = $this->requiredPolicySetting('co_target_percentage', $regulation);
+        // Academic settings & weights (required for SEE direct & indirect attainment when SEE marks are submitted)
+        $w_cia = 0.3;
+        $w_see = 0.7;
+        $w_direct = 0.8;
+        $w_indirect = 0.2;
+        $targetThreshold = 60.0;
+        if ($hasSee) {
+            $w_cia = $this->requiredPolicySetting('attainment_direct_cia_weight', $regulation);
+            $w_see = $this->requiredPolicySetting('attainment_direct_see_weight', $regulation);
+            $w_direct = $this->requiredPolicySetting('overall_direct_weight', $regulation);
+            $w_indirect = $this->requiredPolicySetting('overall_indirect_weight', $regulation);
+            $targetThreshold = $this->requiredPolicySetting('co_target_percentage', $regulation);
+        }
 
         // Initialize mPDF
         $mpdf = new \Mpdf\Mpdf([
@@ -130,9 +137,14 @@ class OBEAnalysisPDFService
             'default_font' => 'helvetica',
             'tempDir' => $this->reportDirectory()
         ]);
-        $mpdf->SetHTMLFooter('<div style="font-size:8px">Provisional analysis. Recorded evidence and configured policy require authorised review. Page {PAGENO} of {nbpg}.</div>');
 
-        $headerFn = function($sectionTitle) use ($meta) {
+        $footerText = $hasSee
+            ? 'Official accreditation analysis dossier. Recorded evidence and configured policy require authorised review. Page {PAGENO} of {nbpg}.'
+            : 'Provisional CIA analysis dossier (Semester End Examination pending). Recorded evidence requires authorised review. Page {PAGENO} of {nbpg}.';
+        $mpdf->SetHTMLFooter('<div style="font-size:8px; color:#555;">' . $footerText . '</div>');
+
+        $headerFn = function($sectionTitle) use ($meta, $hasSee) {
+            $statusBadge = $hasSee ? '' : '<br><span style="font-size:8px; color:#b45309; font-weight:normal;">[Provisional CIA &mdash; SEE Pending]</span>';
             return '
             <table cellpadding="6" cellspacing="0" style="width:100%; border-collapse:collapse; table-layout:fixed;">
                 <tr>
@@ -141,8 +153,8 @@ class OBEAnalysisPDFService
                         <strong>Semester:</strong> ' . htmlspecialchars($meta['semester']) . '<br>
                         <strong>Branch:</strong> ' . htmlspecialchars($meta['branch']) . '
                     </td>
-                    <td style="text-align:center; width:44%; font-size:16px; padding-bottom:0px; font-weight:bold; color:#1a365d; word-wrap:break-word;">
-                        ' . htmlspecialchars($sectionTitle) . '
+                    <td style="text-align:center; width:44%; font-size:15px; padding-bottom:0px; font-weight:bold; color:#1a365d; word-wrap:break-word;">
+                        ' . htmlspecialchars($sectionTitle) . $statusBadge . '
                     </td>
                     <td style="text-align:right; width:28%; font-size:10px; line-height:14px; padding-bottom:0px; word-wrap:break-word;">
                         <strong>Acad. Year:</strong> ' . htmlspecialchars($meta['acad_year']) . '<br>
@@ -206,44 +218,59 @@ class OBEAnalysisPDFService
         $mpdf->WriteHTML($htmlP4);
 
         // ==========================================
-        // PAGE 5: SEE Question Paper Analysis
+        // PAGE 5: CIA Zero Marks Diagnostic Report
         // ==========================================
-        $mpdf->SetHTMLHeader($headerFn('SEE Question Paper Analysis'), 0);
+        $mpdf->SetHTMLHeader($headerFn('CIA Zero Marks Diagnostic Report'), 0);
         $mpdf->AddPage();
-        $htmlP5 = $this->renderSEEQPAnalysisHtml($sub_id, $bloomNames);
+        require_once __DIR__ . '/../facciaanalysis2.class.php';
+        $analysisObj = new \COAnalysis();
+        $zeroJson = $analysisObj->getZeroMarksAnalysis($sub_id, 'all');
+        $zeroData = json_decode($zeroJson, true) ?? [];
+        $htmlP5 = $this->renderZeroMarksHtml($meta, $zeroData);
         $mpdf->WriteHTML($htmlP5);
 
-        // ==========================================
-        // PAGE 6: SEE Marks & Grade Distribution
-        // ==========================================
-        $mpdf->SetHTMLHeader($headerFn('SEE Marks & Grade Distribution'), 0);
-        $mpdf->AddPage();
-        $htmlP6 = $this->renderSEEGradeDistributionHtml($sub_id);
-        $mpdf->WriteHTML($htmlP6);
+        // If SEE marks are submitted, generate Pages 6 to 10
+        if ($hasSee) {
+            // ==========================================
+            // PAGE 6: SEE Question Paper Analysis
+            // ==========================================
+            $mpdf->SetHTMLHeader($headerFn('SEE Question Paper Analysis'), 0);
+            $mpdf->AddPage();
+            $htmlP6 = $this->renderSEEQPAnalysisHtml($sub_id, $bloomNames);
+            $mpdf->WriteHTML($htmlP6);
 
-        // ==========================================
-        // PAGE 7: SEE Result Analysis
-        // ==========================================
-        $mpdf->SetHTMLHeader($headerFn('SEE Result Analysis'), 0);
-        $mpdf->AddPage();
-        $htmlP7 = $this->renderSEEResultAnalysisHtml($sub_id);
-        $mpdf->WriteHTML($htmlP7);
+            // ==========================================
+            // PAGE 7: SEE Marks & Grade Distribution
+            // ==========================================
+            $mpdf->SetHTMLHeader($headerFn('SEE Marks & Grade Distribution'), 0);
+            $mpdf->AddPage();
+            $htmlP7 = $this->renderSEEGradeDistributionHtml($sub_id);
+            $mpdf->WriteHTML($htmlP7);
 
-        // ==========================================
-        // PAGE 8: Combined Direct Attainment Analysis
-        // ==========================================
-        $mpdf->SetHTMLHeader($headerFn('Combined Direct Attainment Analysis'), 0);
-        $mpdf->AddPage();
-        $htmlP8 = $this->renderCombinedDirectAttainmentHtml($sub_id, $w_cia, $w_see);
-        $mpdf->WriteHTML($htmlP8);
+            // ==========================================
+            // PAGE 8: SEE Result Analysis
+            // ==========================================
+            $mpdf->SetHTMLHeader($headerFn('SEE Result Analysis'), 0);
+            $mpdf->AddPage();
+            $htmlP8 = $this->renderSEEResultAnalysisHtml($sub_id);
+            $mpdf->WriteHTML($htmlP8);
 
-        // ==========================================
-        // PAGE 9: OBE Outcome Attainment Matrix
-        // ==========================================
-        $mpdf->SetHTMLHeader($headerFn('OBE Outcome Attainment Matrix'), 0);
-        $mpdf->AddPage();
-        $htmlP9 = $this->renderOBEMatrixHtml($sub_id, $feedbackData, $w_cia, $w_see, $w_direct, $w_indirect, $targetThreshold);
-        $mpdf->WriteHTML($htmlP9);
+            // ==========================================
+            // PAGE 9: Combined Direct Attainment Analysis
+            // ==========================================
+            $mpdf->SetHTMLHeader($headerFn('Combined Direct Attainment Analysis'), 0);
+            $mpdf->AddPage();
+            $htmlP8 = $this->renderCombinedDirectAttainmentHtml($sub_id, $w_cia, $w_see);
+            $mpdf->WriteHTML($htmlP8);
+
+            // ==========================================
+            // PAGE 10: OBE Outcome Attainment Matrix
+            // ==========================================
+            $mpdf->SetHTMLHeader($headerFn('OBE Outcome Attainment Matrix'), 0);
+            $mpdf->AddPage();
+            $htmlP9 = $this->renderOBEMatrixHtml($sub_id, $feedbackData, $w_cia, $w_see, $w_direct, $w_indirect, $targetThreshold);
+            $mpdf->WriteHTML($htmlP9);
+        }
 
         // Save PDF
         $filename = 'obe_analysis_report_' . $sub_id . '_' . date("Ymd_His") . '.pdf';
@@ -1561,6 +1588,228 @@ class OBEAnalysisPDFService
             <!-- Footer Security -->
             <div style="margin-top:14px; border-top:1px dashed #6c757d; padding-top:4px; font-size:7px; color:#6c757d; text-align:center;">
                 Provisional SAR Form C-3 analysis generated on ' . date('d-m-Y H:i:s') . '. Generation checksum (not approval): ' . hash('sha256', json_encode([$meta,$cos,$coDetails,$cqiActions,$audit,$w_cia,$w_see,$w_direct,$w_indirect,$targetThreshold,$targetLevel],JSON_THROW_ON_ERROR)) . '
+            </div>
+        </div>';
+
+        return $html;
+    }
+
+    /**
+     * Render HTML for Page 5 (CIA Zero Marks Diagnostic Overview) inside the OBE Analytics Dossier
+     */
+    private function renderZeroMarksHtml(array $meta, array $analysisData): string
+    {
+        $renderPdfBar = function($pct, $totalBlocks = 8, $color = '#0d6efd') {
+            $val = max(0, min(100, floatval($pct)));
+            $filled = (int)round(($val / 100.0) * $totalBlocks);
+            $empty = $totalBlocks - $filled;
+            $bar = str_repeat('█', $filled) . str_repeat('░', $empty);
+            return '<span style="font-family: monospace; font-size: 7.5px; color: ' . $color . '; letter-spacing: 0.5px;">' . $bar . '</span> <span style="font-size: 7.5px; color: #333; font-weight: bold;">' . number_format($val, 1) . '%</span>';
+        };
+
+        $isAvailable = !empty($analysisData['question_level_available']);
+        $message = $analysisData['message'] ?? '';
+        $data = $analysisData['data'] ?? [];
+        $isOverall = !empty($data['is_overall']);
+        $assessmentLabel = $isOverall ? 'Overall CIA' : 'CIA Analysis';
+        $summary = $data['summary'] ?? [
+            'total_questions' => 0,
+            'questions_with_zeros' => 0,
+            'choice_questions_count' => 0,
+            'total_distinct_students_with_zeros' => 0,
+            'cos_with_zeros' => 0,
+            'total_cos' => 0
+        ];
+        $questions = $data['questions'] ?? [];
+        $coSummary = $data['co_summary'] ?? [];
+
+        // Compact styling to guarantee clean single-page fit on Page 5 of the dossier
+        $qCount = count($questions);
+        $cellPadding = ($qCount > 8) ? '1.5px 3px' : '2px 4px';
+        $tableFontSize = ($qCount > 8) ? '7px' : '7.5px';
+        $tableLineHeight = ($qCount > 8) ? '8.5px' : '9.5px';
+
+        $html = '
+        <div style="font-family: Arial, sans-serif; color: #111;">
+            <h3 style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 3px; font-size: 13px; margin: 0 0 6px 0;">
+                Continuous Internal Assessment (CIA) &mdash; Zero Marks Diagnostic Overview
+            </h3>
+
+            <!-- Statutory Audit Callout Note -->
+            <div style="background-color:#f8f9fa; border:1px solid #ced4da; border-left:3px solid #495057; padding:3px 5px; font-size:7px; line-height:9.5px; color:#495057; margin-bottom:5px;">
+                <strong>About recorded zeros:</strong> This count shows recorded zeros. A student may have not attempted the question or may have secured zero. The recorded mark alone cannot distinguish between the two. Historical zeros may also include placeholders or values saved as zero by older imports. A student may appear in more than one CO row if they have recorded zeros across questions mapped to different COs. Zero total across mapped questions reflects evaluated students whose earned sum across mapped CIA questions is zero.
+            </div>';
+
+        if (!$isAvailable) {
+            $html .= '
+            <div style="border:1px solid #fecaca; background-color:#fef2f2; padding:15px; text-align:center; margin-top:20px; font-size:9px; color:#991b1b;">
+                <strong>' . htmlspecialchars($message ?: 'Question-level marks unavailable.') . '</strong><br>
+                <span style="font-size:7.5px; color:#6b7280;">No question-level marks are available for the selected assessment scope.</span>
+            </div>';
+        } else {
+            // Executive KPI Tiles
+            $html .= '
+            <table cellpadding="3" cellspacing="0" style="width:100%; border-collapse:collapse; text-align:center; margin-bottom:5px; font-size:7.5px;">
+                <tr>
+                    <td style="width:25%; padding:3px; background-color:#eff6ff; border:1px solid #bfdbfe;">
+                        <div style="font-size:11px; font-weight:bold; color:#1d4ed8;">' . (int)$summary['total_questions'] . '</div>
+                        <div style="font-size:6.5px; color:#3b82f6; text-transform:uppercase; font-weight:bold;">Questions Evaluated</div>
+                    </td>
+                    <td style="width:25%; padding:3px; background-color:#fef2f2; border:1px solid #fecaca;">
+                        <div style="font-size:11px; font-weight:bold; color:#b91c1c;">' . (int)$summary['questions_with_zeros'] . '</div>
+                        <div style="font-size:6.5px; color:#ef4444; text-transform:uppercase; font-weight:bold;">Questions with Recorded Zeros</div>
+                    </td>
+                    <td style="width:25%; padding:3px; background-color:#fffbeb; border:1px solid #fde68a;">
+                        <div style="font-size:11px; font-weight:bold; color:#b45309;">' . (int)$summary['total_distinct_students_with_zeros'] . '</div>
+                        <div style="font-size:6.5px; color:#f59e0b; text-transform:uppercase; font-weight:bold;">Distinct Students with &ge; 1 Zero</div>
+                    </td>
+                    <td style="width:25%; padding:3px; background-color:#f0fdf4; border:1px solid #bbf7d0;">
+                        <div style="font-size:11px; font-weight:bold; color:#15803d;">' . (int)$summary['cos_with_zeros'] . ' / ' . (int)$summary['total_cos'] . '</div>
+                        <div style="font-size:6.5px; color:#22c55e; text-transform:uppercase; font-weight:bold;">COs Impacted</div>
+                    </td>
+                </tr>
+            </table>
+
+            <!-- Section 1: Question Zero-Marks Distribution -->
+            <div style="font-size:8px; font-weight:bold; color:#1a365d; margin:4px 0 2px 0; text-transform:uppercase;">
+                1. Question Zero-Marks Distribution
+            </div>
+            <table border="1" cellpadding="2" cellspacing="0" style="width:100%; border-collapse:collapse; font-size:' . $tableFontSize . '; line-height:' . $tableLineHeight . '; table-layout:fixed; margin-bottom:5px;">
+                <thead>
+                    <tr style="background-color:#f1f5f9; color:#1e293b; font-size:7px;">';
+
+            if ($isOverall) {
+                $html .= '<th style="width:10%; text-align:left; padding:' . $cellPadding . ';">Assessment</th>';
+            }
+            $compWidth = $isOverall ? '11%' : '14%';
+            $qWidth = $isOverall ? '8%' : '10%';
+            $coWidth = $isOverall ? '9%' : '11%';
+            $maxMarksWidth = '7%';
+            $recWidth = $isOverall ? '12%' : '14%';
+            $zeroWidth = $isOverall ? '16%' : '18%';
+            $barWidth = $isOverall ? '27%' : '26%';
+
+            $html .= '
+                        <th style="width:' . $compWidth . '; text-align:left; padding:' . $cellPadding . ';">Component</th>
+                        <th style="width:' . $qWidth . '; text-align:left; padding:' . $cellPadding . ';">Question</th>
+                        <th style="width:' . $coWidth . '; text-align:center; padding:' . $cellPadding . ';">Mapped COs</th>
+                        <th style="width:' . $maxMarksWidth . '; text-align:center; padding:' . $cellPadding . ';">Max Marks</th>
+                        <th style="width:' . $recWidth . '; text-align:center; padding:' . $cellPadding . ';">Recorded Scores</th>
+                        <th style="width:' . $zeroWidth . '; text-align:center; padding:' . $cellPadding . ';">Not attempted or secured zero</th>
+                        <th style="width:' . $barWidth . '; text-align:left; padding:' . $cellPadding . ';">Record Rate &amp; Distribution</th>
+                    </tr>
+                </thead>
+                <tbody>';
+
+            foreach ($questions as $q) {
+                $qCos = !empty($q['mapped_cos']) ? implode(', ', $q['mapped_cos']) : '<span style="color:#94a3b8;">Unmapped</span>';
+                $isChoice = !empty($q['is_choice']);
+                $recCount = (int)$q['recorded_scores_count'];
+                $zeroCount = (int)$q['zero_scores_count'];
+
+                // Rate and bar rendering
+                if ($recCount === 0) {
+                    $rateCell = '<span style="color:#64748b; font-style:italic; font-size:6.5px;">Question-level marks unavailable</span>';
+                } elseif ($isChoice) {
+                    $rateCell = '<span style="color:#64748b; font-style:italic; font-size:6.5px;">Choice applicability unknown</span>';
+                } else {
+                    $pct = (float)($q['rate_percentage'] ?? 0.0);
+                    $color = ($pct > 25.0) ? '#dc2626' : (($pct > 10.0) ? '#d97706' : '#2563eb');
+                    $rateCell = $renderPdfBar($pct, 8, $color) . ' <span style="font-size:6px; color:#64748b;">(among recorded scores)</span>';
+                }
+
+                $rowBg = ($zeroCount > 0) ? '#fffafb' : '#ffffff';
+
+                $html .= '<tr style="background-color:' . $rowBg . ';">';
+                if ($isOverall) {
+                    $html .= '<td style="padding:' . $cellPadding . '; font-weight:bold; color:#334155;">' . htmlspecialchars($q['assessment_label'] ?? '') . '</td>';
+                }
+                $html .= '
+                    <td style="padding:' . $cellPadding . '; color:#475569;">' . htmlspecialchars($q['component_type'] ?? '') . '</td>
+                    <td style="padding:' . $cellPadding . '; font-weight:bold; color:#0f172a;">' . htmlspecialchars($q['question_label'] ?? '') . '</td>
+                    <td style="padding:' . $cellPadding . '; text-align:center;">' . $qCos . '</td>
+                    <td style="padding:' . $cellPadding . '; text-align:center;">' . number_format((float)$q['max_marks'], 1) . '</td>
+                    <td style="padding:' . $cellPadding . '; text-align:center;">' . $recCount . '</td>
+                    <td style="padding:' . $cellPadding . '; text-align:center; font-weight:bold; color:' . ($zeroCount > 0 ? '#b91c1c' : '#15803d') . ';">' . $zeroCount . '</td>
+                    <td style="padding:' . $cellPadding . ';">' . $rateCell . '</td>
+                </tr>';
+            }
+
+            $html .= '
+                </tbody>
+            </table>
+
+            <!-- Section 2: Course Outcome (CO) Impact Summary -->
+            <div style="font-size:8px; font-weight:bold; color:#1a365d; margin:4px 0 2px 0; text-transform:uppercase;">
+                2. Course Outcome (CO) Summary
+            </div>
+            <table border="1" cellpadding="2" cellspacing="0" style="width:100%; border-collapse:collapse; font-size:' . $tableFontSize . '; line-height:' . $tableLineHeight . '; table-layout:fixed; margin-bottom:5px;">
+                <thead>
+                    <tr style="background-color:#f1f5f9; color:#1e293b; font-size:7px;">
+                        <th style="width:25%; text-align:left; padding:' . $cellPadding . ';">Course Outcome</th>
+                        <th style="width:16%; text-align:left; padding:' . $cellPadding . ';">Mapped Questions (CIA)</th>
+                        <th style="width:15%; text-align:center; padding:' . $cellPadding . ';">Recorded zero on &ge; 1 question (CIA)</th>
+                        <th style="width:15%; text-align:center; padding:' . $cellPadding . ';">Zero total across mapped questions (CIA)</th>
+                        <th style="width:14%; text-align:center; padding:' . $cellPadding . ';">Semester End (SEE) Status</th>
+                        <th style="width:15%; text-align:left; padding:' . $cellPadding . ';">Limitation Note</th>
+                    </tr>
+                </thead>
+                <tbody>';
+
+            foreach ($coSummary as $co) {
+                $coDesc = !empty($co['co_description']) ? ' &mdash; ' . htmlspecialchars(substr($co['co_description'], 0, 45)) . (strlen($co['co_description']) > 45 ? '...' : '') : '';
+                $mappedQStr = !empty($co['mapped_questions']) ? implode(', ', $co['mapped_questions']) : '<span style="color:#64748b; font-style:italic;">None</span>';
+                
+                $zeroStudentsCell = '';
+                $totalZeroCell = '';
+                if (empty($co['has_mapped_evidence'])) {
+                    $zeroStudentsCell = '<span style="color:#64748b; font-style:italic; font-size:6.5px;">No mapped evidence</span>';
+                    $totalZeroCell = '<span style="color:#64748b; font-style:italic; font-size:6.5px;">No mapped evidence</span>';
+                } else {
+                    $cnt = (int)($co['zero_students_count'] ?? 0);
+                    $zeroStudentsCell = '<strong style="color:' . ($cnt > 0 ? '#b91c1c' : '#15803d') . ';">' . $cnt . '</strong>';
+                    
+                    $totCnt = (int)($co['zero_total_count'] ?? 0);
+                    $totalZeroCell = '<strong style="color:' . ($totCnt > 0 ? '#b91c1c' : '#15803d') . ';">' . $totCnt . '</strong>';
+                }
+
+                $seeSt = $co['see_status'] ?? 'Pending SEE Marks';
+                $seeColor = ($seeSt === 'SEE Marks Submitted') ? '#15803d' : '#64748b';
+                $seeStatusCell = '<span style="color:' . $seeColor . '; font-weight:bold; font-size:6.5px;">' . htmlspecialchars($seeSt) . '</span>';
+                $limitNote = !empty($co['limitation_note']) ? '<span style="color:#b45309; font-size:6.5px;">' . htmlspecialchars($co['limitation_note']) . '</span>' : '<span style="color:#94a3b8;">&mdash;</span>';
+
+                $html .= '
+                <tr>
+                    <td style="padding:' . $cellPadding . '; font-weight:bold; color:#0f172a;">' . htmlspecialchars($co['co_label']) . $coDesc . '</td>
+                    <td style="padding:' . $cellPadding . '; color:#334155;">' . $mappedQStr . '</td>
+                    <td style="padding:' . $cellPadding . '; text-align:center;">' . $zeroStudentsCell . '</td>
+                    <td style="padding:' . $cellPadding . '; text-align:center;">' . $totalZeroCell . '</td>
+                    <td style="padding:' . $cellPadding . '; text-align:center;">' . $seeStatusCell . '</td>
+                    <td style="padding:' . $cellPadding . ';">' . $limitNote . '</td>
+                </tr>';
+            }
+
+            $html .= '
+                </tbody>
+            </table>';
+        }
+
+        // Administrative Sign-Off Section
+        $html .= '
+            <div style="margin-top:6px;">
+                <table cellpadding="2" cellspacing="0" style="width:100%; border-collapse:collapse; font-size:7px; text-align:center;">
+                    <tr>
+                        <td style="width:25%;"><br><br>____________________________<br><strong>Course Teacher</strong><br>' . htmlspecialchars($meta['faculty']) . '</td>
+                        <td style="width:25%;"><br><br>____________________________<br><strong>Course Coordinator</strong><br>Module Reviewer</td>
+                        <td style="width:25%;"><br><br>____________________________<br><strong>Head of Department</strong><br>Dept. of ' . htmlspecialchars($meta['dept_name']) . '</td>
+                        <td style="width:25%;"><br><br>____________________________<br><strong>Principal</strong><br>JNTUACEA</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Audit Trail Checksum -->
+            <div style="margin-top:5px; border-top:1px dashed #cbd5e1; padding-top:2px; font-size:6px; color:#64748b; text-align:center;">
+                Diagnostic Zero Marks Overview generated on ' . date('d-m-Y H:i:s') . '. Scope: ' . htmlspecialchars($assessmentLabel) . '. Verification Checksum: ' . hash('sha256', json_encode([$meta, $assessmentLabel, $summary], JSON_THROW_ON_ERROR)) . '
             </div>
         </div>';
 
