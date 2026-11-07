@@ -36,22 +36,32 @@ require_once("academicsectionheader.php");
                         Maintain the shared academic master data used across institutional workflows.
                     </p>
                     <ul class="mb-3 small">
+                        <li>Manage department class cohorts and student enrollment rosters.</li>
                         <li>Manage buildings and halls used in timetable and room allocation workflows.</li>
                         <li>View and manage regulations required for academic structure mapping.</li>
                         <li>Upload and maintain syllabus records in a structured and grouped format.</li>
                     </ul>
                     <div class="d-grid gap-2">
+                        <a href="adminfacst.php" class="btn btn-outline-success btn-sm">
+                            <i class="bi bi-people me-1"></i> Class Allotment & Student Enrollment
+                        </a>
+                        <a href="uploadstudents.php" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-file-earmark-arrow-up me-1"></i> Direct Bulk Upload Students
+                        </a>
                         <a href="academicsectionmanagebuildings.php" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-building me-1"></i> Buildings & Halls
                         </a>
                         <a href="academicsectionregulations.php" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-diagram-3 me-1"></i> Regulations
                         </a>
-                        <a href="academicsectionsyllabus.php" class="btn btn-outline-primary btn-sm">
-                            <i class="bi bi-file-earmark-text me-1"></i> Syllabus
+                        <a href="academicsectioncoursestructure.php" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-diagram-2 me-1"></i> Course Structure
                         </a>
                         <a href="academicsectioncurriculumsubjects.php" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-book me-1"></i> Curriculum Subjects
+                        </a>
+                        <a href="academicsectionsyllabus.php" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-file-earmark-text me-1"></i> Syllabus
                         </a>
                     </div>
                 </div>
@@ -67,14 +77,18 @@ require_once("academicsectionheader.php");
                     </p>
                     <ul class="mb-3 small">
                         <li>View class attendance reports across departments and classes.</li>
+                        <li>View live campus timetable and room utilization across buildings.</li>
                         <li>View faculty-wise timetable across departments for academic monitoring and reference.</li>
                     </ul>
                     <div class="d-grid gap-2">
                         <a href="academicsectionshowallclsattendance.php" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-calendar-check me-1"></i> View Attendance
                         </a>
+                        <a href="viewtimetable.php" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-clock-history me-1"></i> Campus Timetable & Rooms
+                        </a>
                         <a href="faculty_weekly_timetable.php" class="btn btn-outline-primary btn-sm">
-                            <i class="bi bi-table me-1"></i> View Timetables
+                            <i class="bi bi-table me-1"></i> Faculty Timetables
                         </a>
                     </div>
                 </div>
@@ -97,12 +111,16 @@ require_once("academicsectionheader.php");
                         <a href="academicsectionresults.php" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-file-earmark-arrow-up me-1"></i> Publish Results
                         </a>
+                        <?php if (\FeatureManager::isModuleEnabled('MOD_STUDENT_PROFILE')): ?>
                         <a href="adminstudentprofiles.php" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-person-badge me-1"></i> Student Profiles & Vault
                         </a>
+                        <?php endif; ?>
+                        <?php if (\FeatureManager::isModuleEnabled('MOD_CERTIFICATES')): ?>
                         <a href="admincustodyledger.php" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-journal-bookmark me-1"></i> Custody & Certificates
                         </a>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -116,16 +134,12 @@ require_once("academicsectionheader.php");
                         Perform user support and account maintenance functions assigned to Academic Section.
                     </p>
                     <ul class="mb-3 small">
-                        <li>Reset student passwords when required.</li>
-                        <li>Reset faculty passwords for operational support.</li>
+                        <li>Reset student examination login passwords when required.</li>
                         <li>Update your own login password securely.</li>
                     </ul>
                     <div class="d-grid gap-2">
                         <a href="academicsectionresetstudentpwd.php" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-person me-1"></i> Reset Student Pwd
-                        </a>
-                        <a href="academicsectionresetfacultypwd.php" class="btn btn-outline-primary btn-sm">
-                            <i class="bi bi-briefcase me-1"></i> Reset Faculty Pwd
                         </a>
                         <a href="academicsectionchgpwd.php" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-shield-lock me-1"></i> Change Password

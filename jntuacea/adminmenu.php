@@ -4,10 +4,12 @@
  * Reorganized into cohesive, mobile-responsive Bootstrap 5 dropdowns
  * Preserves Departments as the operational hub for Faculty and Classes/Students
  */
+require_once __DIR__ . '/services/FeatureManager.php';
+
 $currentPage = $page_title ?? '';
 
 $isAttendanceActive = in_array($currentPage, [
-    'View Attendance'
+    'View Attendance', 'Live Timetable'
 ]);
 
 $isQualityActive = in_array($currentPage, [
@@ -51,6 +53,7 @@ $isAccountActive = in_array($currentPage, [
                     <li><a class="dropdown-item" href="adminshowclsattendance.php"><i class="bi bi-people me-2"></i> Attendance by Class</a></li>
                     <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item" href="adminshowallclsattendance.php"><i class="bi bi-bar-chart-line me-2"></i> Overall Class Attendance Summary</a></li>
+                    <li><a class="dropdown-item" href="viewtimetable.php"><i class="bi bi-clock-history me-2"></i> Campus Timetable & Room Usage</a></li>
                 </ul>
             </div>
         </div>
@@ -69,8 +72,12 @@ $isAccountActive = in_array($currentPage, [
                     <li><a class="dropdown-item <?= ($currentPage === 'CIA Analysis' || $currentPage === 'Edit') ? 'active' : ''; ?>" href="adminciaanalysis2.php"><i class="bi bi-pie-chart me-2"></i> CIA Performance & Attainment</a></li>
                     <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item <?= ($currentPage === 'Publish Results') ? 'active' : ''; ?>" href="academicsectionresults.php"><i class="bi bi-file-earmark-spreadsheet me-2"></i> Exam Results Overview</a></li>
+                    <?php if (\FeatureManager::isModuleEnabled('MOD_STUDENT_PROFILE')): ?>
                     <li><a class="dropdown-item <?= ($currentPage === 'Student Profiles & Dossier') ? 'active' : ''; ?>" href="adminstudentprofiles.php"><i class="bi bi-person-badge me-2"></i> Student Dossier & Profiles</a></li>
+                    <?php endif; ?>
+                    <?php if (\FeatureManager::isModuleEnabled('MOD_CERTIFICATES')): ?>
                     <li><a class="dropdown-item <?= ($currentPage === 'Certificates Ledger') ? 'active' : ''; ?>" href="admincustodyledger.php"><i class="bi bi-journal-bookmark me-2"></i> Custodial & Certificates Ledger</a></li>
+                    <?php endif; ?>
                 </ul>
             </div>
         </div>

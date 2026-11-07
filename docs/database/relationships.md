@@ -1,6 +1,6 @@
 # Database Relationships & Entity-Relationship Diagrams
 
-This document illustrates the database relationships, entity-relationship (ER) diagrams, exact foreign key constraints, and table join rules extracted directly from the system database schema (**90 tables**, covering **12 functional domains**).
+This document illustrates the database relationships, entity-relationship (ER) diagrams, exact foreign key constraints, and table join rules extracted directly from the system database schema (**92 tables**, covering **12 functional domains**).
 
 ---
 
@@ -458,6 +458,8 @@ erDiagram
     report_snapshots ||--o{ ai_jobs : "snapshot_id"
     ai_providers ||--o{ ai_jobs : "provider_id"
     users ||--o{ ai_jobs : "owner_user_id / reviewed_by"
+    students ||--o{ student_risk_snapshots : "student_id"
+    classes ||--o{ student_risk_snapshots : "class_id"
 ```
 
 - `audit_logs` captures unified forensic event logs across all authenticated actors.
@@ -465,3 +467,5 @@ erDiagram
 - `workflow_review_history` records immutable state transitions across course completion audits, CQI actions, attendance deletion requests, and exam notifications.
 - `report_snapshots` stores reproducible metric and policy hashes for official accreditation reports and feeds curated, PII-free summaries into `ai_jobs`.
 - `ai_providers`, `ai_job_consents`, and `ai_jobs` govern opt-in, human-reviewed AI draft assistance (`MOD_AI_ASSISTANCE`).
+- `student_risk_snapshots` captures evaluated attendance risk standing per student and class cutoff date, calculated by `\College\AttendanceService` and background analytics in `ai_pipeline/`.
+- `ai_analysis_reports` stores generated background AI analytics and feedback syntheses linked to target entities (`class`, `department`, `subject`) awaiting administrative and faculty review.

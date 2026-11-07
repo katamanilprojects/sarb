@@ -143,13 +143,13 @@ if (!empty($_REQUEST['sub_id'])) {
 
 ## 6. Shared Trusted Core Synchronization (`core/`)
 
-The 22 foundational classes in `jntuacea/core/` (`namespace College`) are shared with the student portal (`jntuaceastudents/core/`):
+The 29 foundational classes in `jntuacea/core/` (`namespace College`) are shared with the student portal (`jntuaceastudents/core/`):
 1. Always edit shared core files in `jntuacea/core/` first.
 2. Synchronize and update `core/release.json` across both portals by running:
    ```bash
    php tools/sync_core.php
    ```
-3. Verify byte-for-byte parity across all 22 core files before committing:
+3. Verify byte-for-byte parity across all 29 core files before committing:
    ```bash
    php tools/sync_core.php --check
    ```

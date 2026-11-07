@@ -31,7 +31,7 @@ $subjectDetails = $facultyObj->getSubjectDetails($sub_id);
 $cos = $coObj->getCOsBySubjectId($sub_id);
 $blooms_levels = $asObj->getBloomsLevels();
 
-if (empty($cos['data'])) {
+if (empty($cos['data']) || !empty($cos['is_inherited'])) {
     echo "<script>alert('Please Add Course Outcomes to proceed.'); window.location.href='faceditoptions.php';</script>";
     exit;
 }

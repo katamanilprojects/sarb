@@ -1734,7 +1734,8 @@ class Admin extends User
                 // Set success status only if both queries executed successfully (if needed)
                 $res['status'] = 1;
                 $adminId = $_SESSION['userid'] ?? ($_SESSION['user_id'] ?? 0);
-                $this->dbActivityLog($adminId, "ADD_STUDENT", "Added student $rollno ($name) to class ID $class_id", "admin", "STUDENT", $rollno);
+                $actorRole = $_SESSION['role'] ?? 'admin';
+                $this->dbActivityLog($adminId, "ADD_STUDENT", "Added student $rollno ($name) to class ID $class_id", $actorRole, "STUDENT", $rollno);
             } else {
                 $this->logs->errLog($myname . "Mysqli Error or else");
             }
@@ -1758,7 +1759,8 @@ class Admin extends User
                     if ($stmt->execute()) {
                         $res['status'] = 1;
                         $adminId = $_SESSION['userid'] ?? ($_SESSION['user_id'] ?? 0);
-                        $this->dbActivityLog($adminId, "UNENROLL_STUDENT", "Un-enrolled student $stroll from class ID $class_id", "admin", "STUDENT", $stroll);
+                        $actorRole = $_SESSION['role'] ?? 'admin';
+                        $this->dbActivityLog($adminId, "UNENROLL_STUDENT", "Un-enrolled student $stroll from class ID $class_id", $actorRole, "STUDENT", $stroll);
                     } else {
                         $this->logs->errLog($myname . "Statement not executed: " . $this->conn->error);
                     }
@@ -1789,7 +1791,8 @@ class Admin extends User
                     $res['status'] = 1;
                     $adminId = $_SESSION['userid'] ?? ($_SESSION['user_id'] ?? 0);
                     $statusText = $status ? "Active" : "Inactive";
-                    $this->dbActivityLog($adminId, "SET_STUDENT_STATUS", "Set student $rollno status to $statusText in class ID $class_id", "admin", "STUDENT", $rollno);
+                    $actorRole = $_SESSION['role'] ?? 'admin';
+                    $this->dbActivityLog($adminId, "SET_STUDENT_STATUS", "Set student $rollno status to $statusText in class ID $class_id", $actorRole, "STUDENT", $rollno);
                 } else {
                     $this->logs->errLog($myname . "Update statement not executed: " . $this->conn->error);
                 }

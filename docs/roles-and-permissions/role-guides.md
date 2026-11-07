@@ -2,7 +2,7 @@
 
 This guide details the operational responsibilities, primary daily workflows, and underlying PHP model and service methods invoked by each of the six primary user roles in **JNTUACEA** (`jntuacea/`) and **JNTUACEASTUDENTS** (`jntuaceastudents/`).
 
-For the exhaustive file-by-file and 90-table read/write mapping, consult [user_feature_file_table_mapping.md](./user_feature_file_table_mapping.md).
+For the exhaustive file-by-file and 92-table read/write mapping, consult [user_feature_file_table_mapping.md](./user_feature_file_table_mapping.md).
 
 ---
 
@@ -19,6 +19,11 @@ The SuperAdmin role is responsible for institutional master data setup, degree g
   - **1-Click Regulation Cloning Engine**: Clones complete regulatory packages (parameters, categories, course types, and policy settings) from existing regulations (e.g., seeding R26 B.Tech from R23 B.Tech).
 - **Autonomous Academic Policy Engine (`superadminacademicsettings.php`)**:
   - Configures regulation-specific academic settings via `Services\SettingsService` and `\College\AssessmentPolicy` across all 12 policy domains (`CIA`, `SEE`, `ATTENDANCE`, `ATTAINMENT`, `GRADING`, `GENERAL`, `PROMOTION`, `HONORS`, `MINOR`, `MOOCS`, `PROJECT`, `ACTIVITIES`), recording mutations to `academic_settings_audit` and `academic_policy_versions`.
+- **Regulation CIA Scheme & Assessment Rules Editor (`cia_policy.php`)**:
+  - Configures regulation-scoped Continuous Internal Assessment policies (`\College\CiaPolicySettings`, `\College\CiaCalculator`) across UG Theory, UG Lab, PG Theory, and PG Lab programs.
+  - Sets required assessment cycles, mid weightages (e.g. 80/20 or 70/30), rounding policies, component maxima, and loads verified statutory regulation rules (`\College\VerifiedRegulations`) with SHA-256 state tracking.
+- **Course Results Readiness & Configuration Audit Console (`views/results_readiness.php`)**:
+  - Centralized pre-publication audit console powered by `\College\ResultsReadiness` validating curriculum linkage, term start/end dates, CIA policy completeness, and assessment grading profiles across all active course offerings.
 - **Attainment Profiles & Subject Overrides (`superadminattainmentsettings.php`)**:
   - Configures regulation- and subject-type-scoped attainment profiles (`attainment_policies`) and course-offering overrides (`subject_attainment_overrides`) via `Services\AttainmentPolicyService` (defining SEE maxima, `grade_bands`, `choice_groups`, and grade estimation policy).
 - **Optional AI Provider Configuration (`superadminaiproviders.php`)**:
@@ -59,6 +64,10 @@ The Admin role represents the Principal and Institutional Registrar. The Princip
 - **Student Dossier, Private Document Vault & Custody Oversight (`adminstudentprofiles.php`, `admincustodyledger.php`, `viewdocument.php`, `viewcertificate.php`)**:
   - Inspects biographical dossiers and streams private student documents via `viewdocument.php` (`Services\StudentProfileService`).
   - Oversees the physical certificate custody ledger (`student_custodial_records`) and approves statutory certificate applications (`student_certificate_requests`).
+- **Course Results Readiness & Academic Integrity Console (`views/results_readiness.php`)**:
+  - Executive readiness cockpit auditing curriculum links, active term dates, and policy completeness before releasing results.
+- **Regulation CIA Scheme Oversight (`cia_policy.php`)**:
+  - Inspects regulation CIA schemes, mid weightages, and component maxima across degree programs (`\College\CiaPolicySettings`).
 - **Institutional Results & Attainment Oversight (`academicsectionresults.php`, `attainmentimport.php`, `adminciaanalysis2.php`)**:
   - Reviews published semester results, CIA vs. uploaded internal reconciliation audits, and college-wide OBE attainment analytics.
 - **Institutional Attendance Audits (`adminshowallclsattendance.php`, `download_attendance_gazette.php`, `export_attendance_excel.php`)**:
@@ -78,13 +87,16 @@ The Academic Section role oversees examination infrastructure, centralized curri
   - **Elective Tracks & BoS Dossier Export**: Organizes Professional/Open Elective tracks and exports Board of Studies curriculum blueprints.
 - **Academic Regulations Reference Hub (`academicsectionregulations.php`, `views/academic_regulations_hub.php`)**:
   - Read-only institutional reference displaying statutory degree parameters, category credit distributions, course types, and active policy rules.
+- **Regulation CIA Schemes & Scheme Configuration (`cia_policy.php`)**:
+  - Configures regulation-level CIA rules, mid component required assessments, theory weights, and lab component structures (`\College\CiaPolicySettings`, `\College\CiaCalculator`).
 - **Master Curriculum Subject Catalog & Master COs (`academicsectioncurriculumsubjects.php`, `curriculum_subject.class.php`)**:
   - Manages the master course catalog (`curriculum_subjects`) and master Course Outcomes (`curriculum_course_outcomes`, `curriculum_co_po_mapping`) with dual-sync to active course offerings.
   - **Deterministic AICTE/UGC Credit Calculation**: Computes credits automatically via $C = L + T + 0.5 \times \max(P, PR)$.
   - **Assessment Scheme Auto-Defaults**: Pre-fills CIE/SEE max marks from `regulation_course_types` and captures elective tracks, delivery modes (`CONVENTIONAL`, `BLENDED`, `ONLINE_MOOC`), and prerequisites.
-- **Examination Results Publication & CIA Reconciliation (`academicsectionresults.php`)**:
+- **Examination Results Publication, Diffing & Readiness Audit (`academicsectionresults.php`, `views/results_import_preview.php`, `views/results_import_history.php`, `views/results_readiness.php`)**:
+  - Audits course offerings via `\College\ResultsReadiness::report()`, ensuring link integrity prior to publication.
   - Creates examination notifications (`ExamResultsService::createNotification()`) with `workflow_status = 'DRAFT'` and `exam_type = 'REGULAR' | 'SUPPLEMENTARY' | 'REVALUATION'`.
-  - Previews and imports bulk CSV result rosters (`ExamResultsService::previewCsv()`, `importCsv()`) via `\College\ResultsCsv`, preserving fractional grade points.
+  - Previews and imports bulk CSV result rosters via `\College\ResultsCsv` and `\College\ResultVersions`, computing exact itemized diffs under `MERGE` or `REPLACE` modes with full audit tracking.
   - Audits live portal CIA vs. uploaded internal marks (`ExamResultsService::getNotificationCiaDiscrepancies()`), marks notifications `REVIEWED` (`reviewNotification()`), and publishes them (`togglePublishStatus()`).
   - Runs advisory credit-based promotion simulations (`MOD_CREDIT_PROMOTION`).
 - **Independent Attainment CSV Import (`attainmentimport.php`)**:
@@ -92,6 +104,9 @@ The Academic Section role oversees examination infrastructure, centralized curri
 - **Student Biographical Dossier, Private Vault & Custody Ledger (`adminstudentprofiles.php`, `admincustodyledger.php`, `viewdocument.php`, `viewcertificate.php`)**:
   - Verifies student profiles and private vault documents (`StudentProfileService::verifyDocument()`).
   - Manages physical certificate custody (`student_custodial_records`) and issues statutory certificates (`StudentProfileService::updateCertificateStatus()`) with atomic numbering (`certificate_sequences`) and opaque verification tokens.
+- **Student Enrollment & Class Rosters (`adminfacst.php`, `viewclasses.php`, `enrollstudents.php`, `viewstudents.php`, `uploadstudents.php`, `unenrollstudents.php`, `editstudent.php`)**:
+  - Manages department class cohorts and enrolls incoming students via bulk CSV upload or carry-forward import from previous semester.
+  - Adds individual students (`Admin::addStudent()`), modifies student profiles, updates status (`Active`/`Inactive`), resets passwords, and unenrolls students.
 - **Campus Buildings, Halls & Syllabus (`academicsectionmanagebuildings.php`, `academicsectionsyllabus.php`)**:
   - Manages buildings (`buildings`), halls (`halls`), and syllabus documents.
 
@@ -105,8 +120,11 @@ The HOD role manages departmental teaching operations, allocates subjects, coord
 ### 4.2 Key Responsibilities & Model/Service Methods
 - **Department Subject & Student Allocation (`hodmapfaculty.php`, `hodmapstudents.php`)**:
   - Assigns faculty members to departmental subjects (`HOD::mapFacultyToSubject()`) and maps students to electives/lab batches (`HOD::mapStudentsToSubject()`).
-- **Conflict-Checked Timetable Scheduling (`hodmanage_timetable.php`)**:
+- **Conflict-Checked Timetable Scheduling (`hodmanage_timetable.php`, `hodtimetable.php`)**:
   - Builds the department's weekly timetable grid using `Timetable` and `\College\TimetableWriter::add()`, enforcing class, room, and faculty overlap checks while permitting parallel electives/labs within a class and shared Open Electives across classes.
+  - Inspects overall departmental timetable grids and room allocations via `hodtimetable.php` and `viewtimetable.php`.
+- **Department Examination Results Oversight (`hodresults.php`)**:
+  - Reviews semester examination performance, letter grades, SGPA distributions, and backlog rosters for departmental classes under `MOD_RESULTS_PUBLISH`.
 - **Row-Locked Attendance Deletion Approval & Audit History (`hodviewdelrequests.php`)**:
   - Reviews faculty deletion requests under `MOD_ATT_REQUESTS` via `HOD::processDeleteRequest()` (`\College\AttendanceCorrection::reviewDeleteRequest()`), locking the request row, refusing ambiguous co-teaching deletions, archiving before/after rows in `academic_record_snapshots`, and purging mistaken records from `attendance` and `diary`.
   - Inspects forensic audit history in `audit_logs` (`HOD::getAttendanceDeleteAuditLogs()`).
@@ -138,10 +156,13 @@ The Faculty role handles classroom-level execution: formulating lecture plans, m
 - **End-of-Course Plan Reconciliation, Compliance Audit & CQI Execution (`faclessonplanreconciliation.php`, `reviewqueue.php`, `download_atr.php`)**:
   - Maps chronological teaching diary entries to planned lectures and submits the NBA Criterion 2.2 course completion compliance audit (`course_completion_audits`, locked upon submission until reviewed).
   - Proposes remedial actions in `course_cqi_actions` (`MOD_CQI_ACTION_TRACKING`), revises returned proposals, records `execution_evidence` upon completion in `reviewqueue.php` (`Services\AcademicReviewService`), and exports the Action Taken Report PDF (`download_atr.php`).
-- **CIA Marks Evaluation & Atomic Lab Rubrics (`facaddciamarks.php`, `facaddcialabmarks.php`, `facaddpgciamarks.php`, `facaddprojectciamarks.php`)**:
-  - Records Mid-1 and Mid-2 scores across Theory, Lab, PG, and Project courses.
-  - Uses the Rubrics Assistant modal (`MOD_LAB_RUBRICS`) backed by `Services\LabAssessmentService` to validate and atomically commit criteria breakdowns (`lab_rubric_evaluations`) alongside `uglab_internal_assessment_marks`.
-  - Views real-time Bloom HOTS/LOTS cognitive distribution badges (`MOD_BLOOM_ANALYSIS`) and uploads assessment attachments (`facciaattachments.php`).
+- **CIA Marks Evaluation & Assessment Pipelines (`facaddciamarks.php`, `facaddcialabmarks.php`, `facbulkd2dmarks.php`, `facadddticiamarks.php`, `pg_cia_form.php`, `facaddprojectciamarks.php`)**:
+  - **Theory CIA**: Records Mid-1 and Mid-2 scores across Subjective, Objective, and Assignment components (`facaddciamarks.php`, `facciamarkscondensed.php`).
+  - **Laboratory Continuous Assessment & Rubrics Assistant**: Evaluates Day-to-Day and internal test marks (`facaddcialabmarks.php`, `facuglabciamarkscondensed.php`), rapid batch day-to-day entries (`facbulkd2dmarks.php`), and utilizes the 15M Rubrics Assistant modal (`MOD_LAB_RUBRICS`) backed by `Services\LabAssessmentService` (`lab_rubric_evaluations`).
+  - **Design Thinking & Innovation (DTI) CIA**: Manages specialized innovation assessment marks (`facadddticiamarks.php`, `facdticiamarkscondensed.php`).
+  - **Postgraduate Continuous Internal Assessment**: Records separate PG mid, assignment, continuous evaluation, lab internal, and lab record components under verified regulation rules (`pg_cia_form.php`, `pg_cia_components.php`, `\College\PgCiaService`).
+  - **Consolidated Marks Register & Export**: Displays student marks rosters with secure CSV export (`facviewmarks.php`, `facviewmarkscsv.php`).
+  - **Assessment Question CO Mapping & Bloom Meter**: Tags questions to Course Outcomes and Bloom levels (`facciacompques.php`, `facquestionco.php`) with real-time HOTS/LOTS advisory indicators (`MOD_BLOOM_ANALYSIS`) and uploads assessment files (`facciaattachments.php`).
 - **Semester End Examination (SEE) Evaluation & Attainment Import (`facseemarks.php`, `facseecompques.php`, `facseemarksentry.php`, `facseedirectmarks.php`, `attainmentimport.php`)**:
   - **Mode A (Question-Level Blueprint)**: Configures SEE blueprints (`Services\SEEBlueprintService`, with protected snapshot-archived revisions when marks exist) and enters question-by-question marks (`Services\QuestionMarksService`).
   - **Mode B (Direct Marks Ledger)**: Enters consolidated external marks (`Services\SeeMarksWriter`).
@@ -150,6 +171,8 @@ The Faculty role handles classroom-level execution: formulating lecture plans, m
 - **Outcome-Based Education, Dossiers & Optional AI Drafts (`facaddcos.php`, `facarticulationmatrix.php`, `facciaanalysis2.php`, `aiassistance.php`)**:
   - Formulates Course Outcomes, maps CO-PO matrices, and generates e-Bluebooks (`download_bluebook.php`), Course Master Files (`download_coursemasterfile.php`), NBA OBE dossiers, and SAR Form C-3 reports (`download_obe_analysis.php`).
   - Opts in to `MOD_AI_ASSISTANCE` (`aiassistance.php`) to queue and review PII-free CO attainment narrative drafts or ATR action proposals.
+- **Elective Subject Offering Maintenance (`facupdsubject.php`)**:
+  - Manages course elective metadata and group allocations.
 
 ---
 
@@ -162,6 +185,9 @@ The Student role provides learners with access to their academic schedules, subj
 - **Authentication & Dashboard (`jntuaceastudents/index.php`, `studenthome.php`)**:
   - Students sign in using their Hall Ticket / Roll Number credentials.
   - `studenthome.php` renders today's schedule, registered subjects, and the real-time **Attendance Risk Gauge** (`MOD_STUDENT_ATTENDANCE_RISK` via `StudentAttendanceService` & `\College\AttendanceService`), displaying **Safe Margin**, **Recovery Periods Needed**, and standing badges (`ELIGIBLE`, `CONDONATION`, `DETAINED`, `PROVISIONAL`).
+- **Course-Wise & Subject-Wise Attendance Breakdown (`studentcourseatt.php`, `studentsubatt.php`, `studentsubatt1.php`, `studentsubjectatt.php`)**:
+  - **Course Summary Register (`studentcourseatt.php`)**: Displays overall conducted and attended hours and percentages across enrolled terms.
+  - **Subject-Wise Deep Dive (`studentsubatt.php`, `studentsubatt1.php`, `studentsubjectatt.php`)**: Shows period-by-period attendance records, hourly topic notes from the faculty diary, CIA marks breakdowns, and published SEE result cards.
 - **Biographical Dossier & Private Cloud Document Vault (`studentprofile.php`, `studentdocuments.php`, `viewdocument.php`)**:
   - Students manage their biographical profile (`student_profiles`) and upload PDF/PNG/JPG scans of statutory certificates (`student_documents`) into private storage (`COLLEGE_DOCUMENT_ROOT` via `\College\DocumentStorage`), streaming their own documents securely through `viewdocument.php` and tracking physical custody holdings (`student_custodial_records`).
 - **Official Examination Results & Fractional SGPA Grade Cards (`studentresults.php`, `studentsubatt.php`, `studentsubjects.php`)**:
@@ -169,8 +195,9 @@ The Student role provides learners with access to their academic schedules, subj
 - **Statutory Certificates Self-Service & Opaque Token Verification (`studentcertificates.php`, `viewcertificate.php`)**:
   - Students apply online for **Bonafide**, **Study & Conduct**, **Custodial**, **Transfer Certificate (TC)**, and **No Dues** certificates (`student_certificate_requests`).
   - Once approved, students view and print their official certificate via `viewcertificate.php?id=<REQ_ID>` (protected by `RecordScope::certificate()`), while third parties can verify authenticity via `viewcertificate.php?id=<REQ_ID>&token=<OPAQUE_TOKEN>` using the 64-character CSPRNG `verification_token`.
-- **Attendance Breakdown, Timetable & 3-Tier Confidential Surveys (`studentsubatt.php`, `studenttimetable.php`, `studentfeedback.php`)**:
-  - Views period-by-period attendance and teaching diary logs (`studentsubatt.php`) and weekly bell schedules (`studenttimetable.php`).
+- **Class Weekly Timetable (`studenttimetable.php`)**:
+  - Renders the class cohort's official weekly bell schedule and room allocations.
+- **3-Tier Confidential Accreditation Surveys (`studentfeedback.php`, `studentfeedbacksubjects.php`)**:
   - Completes confidential accreditation surveys through `StudentFeedbackService`:
     1. **Faculty Teaching Appraisal (`student_faculty_feedback.php`)**: 19-criterion evaluation (`fac_q1`–`fac_q19`) with strict student anonymity (`is_anonymous = 1`).
     2. **Course Outcome Survey (`student_co_feedback.php`)**: Self-perceived achievement per Course Outcome (CO1–CO6).

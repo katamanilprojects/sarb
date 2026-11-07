@@ -131,6 +131,10 @@ class Student extends User {
         return $this->getAttendanceService()->getStudentPermissions($student_id, $class_id);
     }
 
+    public function getStudentSubjectsAttendanceSummary($student_id, $class_id) {
+        return $this->getAttendanceService()->getStudentSubjectsAttendanceSummary((int)$student_id, (int)$class_id);
+    }
+
     // StudentAssessmentService proxies
     public function getSubjectsByStudentId($student_id) {
         return $this->getAssessmentService()->getSubjectsByStudentId($student_id);

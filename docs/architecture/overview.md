@@ -8,7 +8,7 @@ This document describes the architectural layout, runtime environment, shared tr
 
 - **Runtime**: PHP 8.0+ / PHP 8.3 (strict types enabled across core and service modules)
 - **Web Server**: Apache 2.4+ (hosted via MAMP / XAMPP / LAMP stack with `.htaccess` hardening)
-- **Database**: MariaDB 10.4+ / MySQL 8.0+ (`utf8mb4` charset, 90 tables across 12 domains)
+- **Database**: MariaDB 10.4+ / MySQL 8.0+ (`utf8mb4` charset, 92 tables across 12 domains, 839 columns)
 - **Frontend**: Server-rendered HTML5, Bootstrap 4/5, jQuery, DataTables, FontAwesome, Bootstrap Icons, Chart.js
 - **PDF & Spreadsheet Engines**: TCPDF (`services/*PDFService.php`), FPDI, mPDF, PhpSpreadsheet (`services/FeedbackExcelService.php`)
 - **Configuration Mechanism**: PHP constant definitions in root `.env.php` (templated via `.env.example`)
@@ -19,7 +19,11 @@ classattendance.in/
 ├── .env.example              # Environment configuration template
 ├── .env.php                  # Local/production environment credentials (git-ignored)
 ├── .htaccess                 # Root Apache access hardening rules
-├── FACULTY_USER_MANUAL.md    # 25-feature step-by-step Faculty Operations Manual
+├── ai_pipeline/              # Background AI/ML analytics, risk prediction pipeline & workers
+│   ├── api/                  # High-performance risk assessment API (`risk_service.php`)
+│   ├── database/             # Pipeline analytics schema & notes (`migration_ai_analytics.sql`)
+│   ├── tests/                # Automated pipeline verification & unit tests
+│   └── worker/               # Nightly/hourly batch predictors (`attendance_batch.php`, `runtime.py`)
 ├── database/                 # Schema dumps, baselines, seeds, and migrations
 │   ├── baselines/
 │   ├── dumps/
@@ -28,13 +32,13 @@ classattendance.in/
 │   └── seeds/
 ├── docs/                     # Complete technical, database, workflow & deployment docs
 ├── jntuacea/                 # Staff, Faculty, HOD, Academic Section, Admin & SuperAdmin Portal
-│   ├── core/                 # 22 Shared Trusted Core classes (namespace College)
+│   ├── core/                 # 29 Shared Trusted Core classes (namespace College)
 │   ├── services/             # 21 Enterprise domain & PDF/Excel/AI service classes
-│   ├── views/                # Modular UI view partials
+│   ├── views/                # Modular UI view partials and readiness consoles
 │   └── *.class.php / *.php   # Domain models and page controllers
 ├── jntuaceastudents/         # Student Self-Service Portal
-│   ├── core/                 # Synchronized copy of 22 Shared Trusted Core classes
-│   ├── services/             # Student-scoped domain services
+│   ├── core/                 # Synchronized copy of 29 Shared Trusted Core classes
+│   ├── services/             # 8 Student-scoped domain and assessment services
 │   └── *.class.php / *.php   # Student models and page controllers
 ├── tests/                    # Automated workflow, core, attainment, AI & migration test suites
 └── tools/                    # CLI maintenance, migration, core-sync, reconciliation & AI worker scripts
@@ -46,17 +50,18 @@ classattendance.in/
 
 The application follows a **Layered Page-Controller / Domain-Service / Shared Trusted Core** architectural pattern:
 
-1. **Page Controllers (`jntuacea/*.php` & `jntuaceastudents/*.php`)**:
-   - Serve as entry points for HTTP requests (e.g., `facaddattendance.php`, `adminenrollstudents.php`, `hodmanage_timetable.php`, `attainmentimport.php`, `reviewqueue.php`, `aiassistance.php`).
-   - Manage request parsing, session verification, `FeatureManager` module/action guards, and HTML rendering.
+1. **Page Controllers & Views (`jntuacea/*.php`, `jntuacea/views/` & `jntuaceastudents/*.php`)**:
+   - Serve as entry points for HTTP requests across all roles (e.g., `facaddattendance.php`, `adminenrollstudents.php`, `hodmanage_timetable.php`, `attainmentimport.php`, `reviewqueue.php`, `aiassistance.php`, `cia_policy.php`, `pg_cia_form.php`, `facbulkd2dmarks.php`, `hodresults.php`, `studentresults.php`, `studentsubatt.php`, `studentcourseatt.php`).
+   - Manage request parsing, session verification, `FeatureManager` module/action guards, and server-rendered HTML rendering with modular view partials (`results_readiness.php`, `results_import_preview.php`, `results_import_history.php`, `academic_regulations_hub.php`, `manage_academic_settings.php`, `partials/faculty_remarks_card.php`).
    - Include role-specific layout fragments (`header.php`, `facmenu.php` / `hodmenu.php` / `adminmenu.php` / `academicsectionmenu.php` / `superadminmenu.php` / `studentmenu.php`, `footer.php`).
 
 2. **Shared Trusted Core (`jntuacea/core/` & `jntuaceastudents/core/` — `namespace College`)**:
-   - Twenty-two strict-typed foundational classes synchronized across both portals via `php tools/sync_core.php` and verified by `core/release.json`:
-     - **Infrastructure & Security**: `Connection` (single shared `mysqli` connection per request), `Clock` (`Asia/Kolkata` institutional time), `DateRange` (parameter-bound `YYYY-MM-DD` date range validation), `RequestSecurity` (automatic CSRF token injection/verification, same-origin checks, and resource scope guards), `RecordScope` (ownership assertions for subjects, classes, students, documents, certificates, and curriculum).
-     - **Attendance Engine**: `AttendanceCalculator` (unrounded regulatory standing classification), `AttendanceService` (unified attendance counting with joining-date, mapped-subject, permission, and missing-period checks), `AttendanceCorrection` (atomic 7-day student status corrections and row-locked HOD deletion reviews with before/after snapshots).
-     - **Assessment, Results & Attainment Engine**: `AssessmentPolicy` (exact regulation ID policy lookup and SHA-256 policy versioning), `MarksNormalizer` (gross-to-net scaling, choice-group evaluation, and grade-band midpoint conversion), `AttainmentCalculator` (choice-aware, equal-share multi-CO direct attainment with separate measured, estimated, and missing student counts), `ResultsPolicy` (course-specific assessment and grade-band resolution), `ResultRow` (row-level normalization of grades, points, credits, and sentinels), `ResultsCsv` (atomic CSV validator supporting `REGULAR`, `SUPPLEMENTARY`, and `REVALUATION` notifications), `ResultsSeeSync` (transactional SEE evidence synchronization on regular publication and staleness marking on withdrawal), and `PublishedResults` (student-scoped published result and attempt GPA reader).
-     - **Catalog, Timetables, Documents & AI**: `SubjectCatalog` (curriculum linkage lookup), `TimetableWriter` (mutex-locked timetable slot writer with class, room, and faculty conflict checks, supporting parallel electives/labs and shared open electives), `DocumentStorage` (private document repository outside web root with legacy fallback), `CertificateNumber` (atomic per-prefix sequence generator), `ReportValue` (provisional/unavailable metric value wrapper), and `AIProvider` (bounded HTTP adapter for local Ollama and OpenAI-compatible Chat Completions endpoints).
+   - Twenty-nine strict-typed foundational classes synchronized across both portals via `php tools/sync_core.php` and verified by `core/release.json`:
+     - **Infrastructure & Security (5 classes)**: `Connection` (single shared `mysqli` connection per request with CLI test override), `Clock` (`Asia/Kolkata` institutional time), `DateRange` (parameter-bound `YYYY-MM-DD` date range validation), `RequestSecurity` (automatic CSRF token injection/verification, same-origin checks, and resource scope guards), `RecordScope` (ownership assertions for subjects, classes, students, documents, certificates, and curriculum).
+     - **Attendance Engine (3 classes)**: `AttendanceCalculator` (unrounded regulatory standing classification: `ELIGIBLE`, `CONDONATION`, `DETAINED`, `PROVISIONAL`, `POLICY_REVIEW`), `AttendanceService` (unified attendance counting with joining-date, mapped-subject, permission, and missing-period checks), `AttendanceCorrection` (atomic 7-day student status corrections and row-locked HOD deletion reviews with before/after snapshots).
+     - **Assessment, CIA & Regulations Engine (8 classes)**: `AssessmentPolicy` (exact regulation ID policy lookup and SHA-256 policy versioning), `VerifiedRegulations` (statutory regulation rules and PDF source hashes for MCA R20, M.Tech R21, M.Tech R25, B.Tech R20/R23/R26), `CiaCalculator` (strict per-course and per-student CIA policy evaluation with zero-score preservation and complete-cohort enforcement), `CiaPolicySettings` (administrative regulation CIA scheme editor with SHA-256 state tracking), `CiaService` (scoped class and subject CIA loader), `PgCiaService` (separate postgraduate assessment component identities: mids 1/2, assignment 3, continuous evaluation 4, lab internal 11, record 12), `MarksNormalizer` (gross-to-net scaling, choice-group evaluation, equal multi-CO sharing, and grade-band midpoint conversion), `AttainmentCalculator` (choice-aware, equal-share multi-CO direct attainment with separate measured, estimated, and missing student counts).
+     - **Examination Results & Ingestion Engine (7 classes)**: `ResultsPolicy` (course-specific assessment and grade-band resolution), `ResultRow` (row-level normalization of grades, points, credits, and sentinels), `ResultsCsv` (atomic CSV validator supporting `REGULAR`, `SUPPLEMENTARY`, and `REVALUATION` notifications), `ResultVersions` (canonical result set generation, duplicate prevention, and incremental merge vs complete replacement diffing), `ResultsReadiness` (pre-publication audit across curriculum links, class dates, CIA formulas, and grading profiles), `ResultsSeeSync` (transactional regular SEE evidence synchronization and withdrawal staleness tracking), `PublishedResults` (student-scoped published result and attempt GPA reader).
+     - **Catalog, Timetables, Documents & AI (6 classes)**: `SubjectCatalog` (curriculum linkage lookup), `TimetableWriter` (mutex-locked timetable slot writer with class, room, and faculty conflict checks, supporting parallel electives/labs and shared open electives), `DocumentStorage` (private document repository outside web root with legacy fallback), `CertificateNumber` (atomic per-prefix sequence generator), `ReportValue` (provisional/unavailable metric value wrapper), and `AIProvider` (bounded HTTP adapter for local Ollama and OpenAI-compatible Chat Completions endpoints).
 
 3. **Domain Service Models (`*.class.php` & `services/`)**:
    - Encapsulate business logic, transaction handling, before/after snapshots, and validations.
@@ -134,6 +139,8 @@ Located in `jntuacea/logs/` and `jntuaceastudents/logs/` with daily-stamped log 
 - **`workflow_review_history` Table**: Immutable state-transition log (`from_status` &rarr; `to_status`, `actor_user_id`, `remarks`) tracking review lifecycles across course completion audits, CQI actions, attendance deletion requests, and examination notifications.
 - **`academic_settings_audit` & `academic_policy_versions` Tables**: Track individual parameter edits (`academic_settings_audit`) and regulation-wide SHA-256 policy snapshot versions (`academic_policy_versions`).
 - **`report_snapshots` Table**: Persists reproducible report state (`policy_hash`, `metrics_hash`, `scope_json`, `metrics_json`, `cutoff_at`) for official accreditation exports such as Action Taken Reports (`download_atr.php`).
+- **`student_risk_snapshots` Table**: Stores daily/periodic attendance risk evaluation snapshots computed via `\College\AttendanceService` and predictive background analytics (`ai_pipeline/`), recording `policy_hash`, canonical category (`ELIGIBLE`, `CONDONABLE`, `DETAINED`, `POLICY_REVIEW`, `DATA_UNAVAILABLE`), and JSON metrics (`attendance_pct`, `safe_margin`, `recovery_periods`).
+- **`ai_analysis_reports` Table**: Stores human-reviewable draft and finalized AI analytics reports (`report_type`, `entity_type`, `entity_id`, `source_hash`, `analysis_json`, `model_used`, `status`).
 - **`activity_logs` & `fac_activity_logs` Tables**: Legacy administrative and faculty operational log tables retained for historical continuity.
 
 ---

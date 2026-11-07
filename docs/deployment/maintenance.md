@@ -34,7 +34,7 @@ find "$BACKUP_DIR" -name "backup_*.sql.gz" -mtime +30 -delete
 All CLI scripts inside `tools/` deny HTTP web requests (`404`) and must be executed from the command line in the repository root (`/Applications/MAMP/htdocs/classattendance.in`):
 
 1. **Shared Core Parity Synchronization (`tools/sync_core.php`)**:
-   - Synchronizes the 22 shared core classes from `jntuacea/core/` to `jntuaceastudents/core/` and updates `core/release.json`:
+   - Synchronizes the 29 shared core classes from `jntuacea/core/` to `jntuaceastudents/core/` and updates `core/release.json`:
      ```bash
      php tools/sync_core.php
      php tools/sync_core.php --check
@@ -64,6 +64,12 @@ All CLI scripts inside `tools/` deny HTTP web requests (`404`) and must be execu
    - Processes up to `N` queued opt-in AI draft jobs (`ai_jobs`) serialized per database via `GET_LOCK`:
      ```bash
      php tools/ai_worker.php --limit=10
+     ```
+7. **AI Pipeline Background Workers (`ai_pipeline/`)**:
+   - Runs health checks and executes background qualitative feedback sentiment analysis workers storing draft reports in `ai_analysis_reports`:
+     ```bash
+     python ai_pipeline/tools/health_check.py
+     python ai_pipeline/workers/analyze_feedback.py
      ```
 
 ---

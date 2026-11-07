@@ -4,6 +4,7 @@ require_once __DIR__.'/services/FeatureManager.php';
 require_once __DIR__.'/services/AcademicReviewService.php';
 $role=$_SESSION['role']??'';
 if(!in_array($role,['faculty','hod'],true)){\College\RequestSecurity::deny('Faculty or HOD access required.');}
+\FeatureManager::requireAccess('MOD_CQI_ACTION_TRACKING');
 $service=new \Services\AcademicReviewService();$message='';
 if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){
     $module=($_POST['type']??'')==='COURSE'?'MOD_LESSON_PLAN':'MOD_CQI_ACTION_TRACKING';

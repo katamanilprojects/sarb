@@ -1,0 +1,17 @@
+{
+  "builtin": "schedule",
+  "args": [
+    "0 * * * *",
+    "cmd.exe",
+    "/d",
+    "/c",
+    "C:\\classattendance-staging\\ai_pipeline\\run_hourly_development.bat"
+  ],
+  "restart_policy": "always",
+  "display_name": "Hourly AI Pipeline Staging Developer",
+  "description": "Runs the locked staging CLI driver. Configure absolute path, private config and Python first. Does not deploy.",
+  "env": {
+    "AI_PIPELINE_CONFIG": "C:\\classattendance-ai\\staging-config.json",
+    "AI_PIPELINE_PYTHON": "C:\\classattendance-ai\\staging\\venv\\Scripts\\python.exe"
+  }
+}

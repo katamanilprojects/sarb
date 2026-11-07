@@ -11,11 +11,18 @@ require_once __DIR__ . '/bootstrap.php';
 if (session_status() !== PHP_SESSION_ACTIVE) { session_start(); }
 $pageTitle = "Live Timetable";
 
-// Use your existing includes
-if (!empty($_SESSION['role']) && $_SESSION['role'] === 'academic_section') {
+// Use role-specific navigation headers for shared campus overview
+$userRole = $_SESSION['role'] ?? '';
+if ($userRole === 'academic_section') {
     require_once('academicsectionheader.php');
-} else{
-    require_once 'header.php';
+} elseif ($userRole === 'admin') {
+    require_once('adminheader.php');
+} elseif ($userRole === 'hod') {
+    require_once('hodheader.php');
+} elseif ($userRole === 'superadmin') {
+    require_once('superadminheader.php');
+} else {
+    require_once('header.php');
 }
 
 require_once 'hod.class.php';
@@ -304,576 +311,105 @@ $distinct_rooms = array_unique(array_map(function($c) {
 $occupied_rooms = count($distinct_rooms);
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-    <meta name="description" content="Real-time class schedule viewer">
-    <meta name="theme-color" content="#3b82f6">
-    
-    <style>
-        /* Mobile-First CSS with Modern Colors */
-        :root {
-            --primary: #3b82f6;
-            --primary-dark: #2563eb;
-            --success: #10b981;
-            --text: #1f2937;
-            --text-light: #6b7280;
-            --bg: #ffffff;
-            --bg-alt: #f8fafc;
-            --border: #e5e7eb;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 16px;
-            line-height: 1.6;
-            color: var(--text);
-        }
-        
-        .container-custom {
-            width: 100%;
-            padding: 1rem;
-            margin: 0 auto;
-        }
-        
-        /* Header with Gradient */
-        .header-custom {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 1.5rem 1rem;
-            border-radius: 16px;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
-        }
-        
-        .header-custom h1 {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-        }
-        
-        .header-info {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            font-size: 0.875rem;
-            opacity: 0.95;
-        }
-        
-        /* Stats Grid with Gradient Cards */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.75rem;
-            margin-bottom: 1.5rem;
-        }
-        
-        .stat-card {
-            background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-            border-radius: 12px;
-            padding: 1rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            border: 1px solid var(--border);
-            border-left: 4px solid var(--primary);
-        }
-        
-        .stat-card:nth-child(1) {
-            border-left-color: #3b82f6;
-        }
-        
-        .stat-card:nth-child(2) {
-            border-left-color: #10b981;
-        }
-        
-        .stat-card:nth-child(3) {
-            border-left-color: #f59e0b;
-        }
-        
-        .stat-card:nth-child(4) {
-            border-left-color: #8b5cf6;
-        }
-        
-        .stat-value {
-            font-size: 1.75rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 0.25rem;
-        }
-        
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--text-light);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-weight: 600;
-        }
-        
-        /* Filter Section with Gradient */
-        .filter-section {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 16px;
-            padding: 1rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.2);
-        }
-        
-        .form-group {
-            margin-bottom: 1rem;
-        }
-        
-        .form-group:last-child {
-            margin-bottom: 0;
-        }
-        
-        .form-group label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            color: white;
-        }
-        
-        .form-control {
-            width: 100%;
-            padding: 0.75rem;
-            font-size: 1rem;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.95);
-            min-height: 44px;
-            transition: all 0.3s ease;
-        }
-        
-        .form-control:focus {
-            outline: none;
-            border-color: white;
-            background: white;
-            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2);
-        }
-        
-        /* Alert with Modern Style */
-        .alert-info {
-            background: linear-gradient(135deg, #dbeafe 0%, #e0f2fe 100%);
-            border-left: 4px solid #3b82f6;
-            padding: 1rem;
-            border-radius: 12px;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
-        }
-        
-        .alert-warning {
-            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-            border-left: 4px solid #f59e0b;
-            padding: 1rem;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
-        }
-        
-        /* Department Section Header */
-        .dept-section {
-            margin-bottom: 2rem;
-        }
-        
-        .dept-header {
-            padding: 1rem;
-            border-radius: 12px;
-            margin-bottom: 1rem;
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        
-        /* Department-specific colors with gradients */
-        .dept-header.dept-CSE {
-            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
-        }
-        
-        .dept-header.dept-ECE {
-            background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%);
-        }
-        
-        .dept-header.dept-EEE {
-            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
-        }
-        
-        .dept-header.dept-CIVIL {
-            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
-        }
-        
-        .dept-header.dept-MECH,
-        .dept-header.dept-ME {
-            background: linear-gradient(135deg, #E91E63 0%, #C2185B 100%);
-        }
-        
-        .dept-header.dept-CHE {
-            background: linear-gradient(135deg, #00BCD4 0%, #0097A7 100%);
-        }
-        
-        .dept-header.dept-IT {
-            background: linear-gradient(135deg, #673AB7 0%, #512DA8 100%);
-        }
-        
-        /* Default for other departments */
-        .dept-header:not([class*="dept-CSE"]):not([class*="dept-ECE"]):not([class*="dept-EEE"]):not([class*="dept-CIVIL"]):not([class*="dept-MECH"]):not([class*="dept-ME"]):not([class*="dept-CHE"]):not([class*="dept-IT"]) {
-            background: linear-gradient(135deg, #607D8B 0%, #455A64 100%);
-        }
-        
-        .dept-badge {
-            background: rgba(255, 255, 255, 0.25);
-            padding: 0.375rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.875rem;
-            font-weight: 600;
-            backdrop-filter: blur(10px);
-        }
-        
-        /* Class Cards with Department Colors */
-        .classes-grid {
-            display: grid;
-            gap: 1rem;
-        }
-        
-        .class-card {
-            background: white;
-            border-radius: 16px;
-            padding: 1.25rem;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            border-left: 5px solid;
-            transition: all 0.3s ease;
-        }
-        
-        .class-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-        }
-        
-        /* Card border colors by department */
-        .class-card.dept-CSE {
-            border-left-color: #2196F3;
-        }
-        
-        .class-card.dept-ECE {
-            border-left-color: #9C27B0;
-        }
-        
-        .class-card.dept-EEE {
-            border-left-color: #FF9800;
-        }
-        
-        .class-card.dept-CIVIL {
-            border-left-color: #4CAF50;
-        }
-        
-        .class-card.dept-MECH,
-        .class-card.dept-ME {
-            border-left-color: #E91E63;
-        }
-        
-        .class-card.dept-CHE {
-            border-left-color: #00BCD4;
-        }
-        
-        .class-card.dept-IT {
-            border-left-color: #673AB7;
-        }
-        
-        .subject-name {
-            font-size: 1.125rem;
-            font-weight: 700;
-            margin-bottom: 0.25rem;
-            color: var(--text);
-        }
-        
-        .subject-code {
-            font-size: 0.875rem;
-            color: var(--text-light);
-            font-family: 'Courier New', monospace;
-            background: var(--bg-alt);
-            padding: 0.25rem 0.5rem;
-            border-radius: 6px;
-            display: inline-block;
-            margin-bottom: 1rem;
-        }
-        
-        .detail-row {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 0.625rem;
-            font-size: 0.875rem;
-            align-items: flex-start;
-        }
-        
-        .detail-label {
-            font-weight: 600;
-            color: var(--text-light);
-            min-width: 70px;
-            flex-shrink: 0;
-        }
-        
-        .detail-value {
-            color: var(--text);
-            flex: 1;
-        }
-        
-        /* Badge Styles with Modern Colors */
-        .badge {
-            display: inline-block;
-            padding: 0.375rem 0.75rem;
-            border-radius: 8px;
-            font-size: 0.8125rem;
-            margin: 0.125rem;
-            font-weight: 500;
-        }
-        
-        .badge-theory {
-            background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%);
-            color: #1E40AF;
-            border: 1px solid #93C5FD;
-        }
-        
-        .badge-lab {
-            background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
-            color: #065F46;
-            border: 1px solid #6EE7B7;
-        }
-        
-        .badge-tutorial {
-            background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
-            color: #92400E;
-            border: 1px solid #FCD34D;
-        }
-        
-        .badge-practical {
-            background: linear-gradient(135deg, #FCE7F3 0%, #FBCFE8 100%);
-            color: #9F1239;
-            border: 1px solid #F9A8D4;
-        }
-        
-        .badge-skill {
-            background: linear-gradient(135deg, #E0E7FF 0%, #C7D2FE 100%);
-            color: #3730A3;
-            border: 1px solid #A5B4FC;
-        }
-        
-        .badge-dti {
-            background: linear-gradient(135deg, #FED7AA 0%, #FDBA74 100%);
-            color: #9A3412;
-            border: 1px solid #FB923C;
-        }
-        
-        .badge-oe {
-            background: linear-gradient(135deg, #CCFBF1 0%, #99F6E4 100%);
-            color: #134E4A;
-            border: 1px solid #5EEAD4;
-        }
-        
-        .badge-pe {
-            background: linear-gradient(135deg, #F3E8FF 0%, #E9D5FF 100%);
-            color: #581C87;
-            border: 1px solid #D8B4FE;
-        }
-        
-        .badge-mncc {
-            background: linear-gradient(135deg, #FECACA 0%, #FCA5A5 100%);
-            color: #7F1D1D;
-            border: 1px solid #F87171;
-        }
-        
-        .class-badge {
-            background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
-            color: #374151;
-            border: 1px solid #D1D5DB;
-        }
-        
-        /* Table with Modern Styling */
-        .table-responsive {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
-        
-        .table {
-            width: 100%;
-            min-width: 600px;
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-        }
-        
-        .table th {
-            padding: 1rem 0.75rem;
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-            font-size: 0.8125rem;
-            font-weight: 700;
-            text-align: left;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-light);
-            border-bottom: 2px solid #e5e7eb;
-        }
-        
-        .table td {
-            padding: 1rem 0.75rem;
-            border-top: 1px solid var(--border);
-            font-size: 0.875rem;
-        }
-        
-        .table tbody tr {
-            transition: background-color 0.2s ease;
-        }
-        
-        .table tbody tr:hover {
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-        }
-        
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 3rem 2rem;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
-        
-        .empty-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-            opacity: 0.3;
-        }
-        
-        .empty-text {
-            font-size: 1rem;
-            color: var(--text-light);
-            font-weight: 500;
-        }
-        
-        /* Responsive Design */
-        @media (min-width: 640px) {
-            .container-custom {
-                padding: 1.5rem;
-            }
-            
-            .header-custom h1 {
-                font-size: 2rem;
-            }
-            
-            .header-info {
-                flex-direction: row;
-                justify-content: space-between;
-            }
-            
-            .stats-grid {
-                grid-template-columns: repeat(4, 1fr);
-                gap: 1rem;
-            }
-            
-            .filter-grid {
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 1rem;
-            }
-            
-            .classes-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-        
-        @media (min-width: 1024px) {
-            .container-custom {
-                max-width: 1280px;
-                padding: 2rem;
-            }
-            
-            .header-custom h1 {
-                font-size: 2.25rem;
-            }
-            
-            .filter-grid {
-                grid-template-columns: repeat(4, 1fr);
-            }
-            
-            .classes-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-        }
-        
-        /* Print Styles */
-        @media print {
-            .filter-section {
-                display: none;
-            }
-            
-            .class-card {
-                break-inside: avoid;
-                page-break-inside: avoid;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header-custom">
-            <h1>📚 Real-Time Class Schedule</h1>
-            <div class="header-info">
-                <div>📅 <strong><?= e($current_date) ?></strong></div>
-                <div>🕐 <strong><?= e($current_time_display) ?></strong></div>
-                <div>📖 <strong><?= e($active_acad_year) ?></strong></div>
+<div class="container my-4">
+    <!-- Header Banner -->
+    <div class="card shadow-sm border-0 mb-4 bg-white">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h4 class="mb-1 text-primary">
+                        <i class="bi bi-clock-history text-primary me-2"></i>Campus Timetable & Room Usage
+                    </h4>
+                    <p class="text-muted mb-0 small">
+                        Real-time institutional schedule overview. Monitor active classes, allocated halls, and teaching faculty across all departments.
+                    </p>
+                </div>
+                <div class="text-end text-muted small">
+                    <div>
+                        <i class="bi bi-calendar3 me-1"></i><?= e($current_date) ?> &bull; <i class="bi bi-clock me-1 ms-1"></i><?= e($current_time_display) ?>
+                    </div>
+                    <div class="mt-1">
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                            <i class="bi bi-mortarboard me-1"></i>AY <?= e($active_acad_year) ?>
+                        </span>
+                    </div>
+                </div>
             </div>
         </div>
-        
-        <!-- Statistics -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value"><?= $unique_subjects ?></div>
-                <div class="stat-label">Subjects</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value"><?= $total_classes ?></div>
-                <div class="stat-label">Classes</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value"><?= $active_faculties ?></div>
-                <div class="stat-label">Faculties</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value"><?= $occupied_rooms ?></div>
-                <div class="stat-label">Rooms</div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card h-100 shadow-sm border-0 border-start border-4 border-primary bg-white">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-uppercase small fw-bold text-primary">Active Subjects</span>
+                        <i class="bi bi-journal-bookmark fs-4 text-primary opacity-75"></i>
+                    </div>
+                    <h3 class="fw-bold mb-0 text-dark"><?= $unique_subjects ?></h3>
+                    <small class="text-muted">Course Offerings</small>
+                </div>
             </div>
         </div>
-        
-        <!-- Filters -->
-        <div class="filter-section">
-            <form method="post" action="viewtimetable.php">
+        <div class="col-6 col-md-3">
+            <div class="card h-100 shadow-sm border-0 border-start border-4 border-success bg-white">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-uppercase small fw-bold text-success">Scheduled Classes</span>
+                        <i class="bi bi-calendar2-week fs-4 text-success opacity-75"></i>
+                    </div>
+                    <h3 class="fw-bold mb-0 text-dark"><?= $total_classes ?></h3>
+                    <small class="text-muted">Class Cohorts</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card h-100 shadow-sm border-0 border-start border-4 border-info bg-white">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-uppercase small fw-bold text-info">Active Faculty</span>
+                        <i class="bi bi-person-badge fs-4 text-info opacity-75"></i>
+                    </div>
+                    <h3 class="fw-bold mb-0 text-dark"><?= $active_faculties ?></h3>
+                    <small class="text-muted">In Session</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card h-100 shadow-sm border-0 border-start border-4 border-warning bg-white">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-uppercase small fw-bold text-warning-emphasis">Occupied Rooms</span>
+                        <i class="bi bi-door-open fs-4 text-warning opacity-75"></i>
+                    </div>
+                    <h3 class="fw-bold mb-0 text-dark"><?= $occupied_rooms ?></h3>
+                    <small class="text-muted">Halls & Labs</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Strip -->
+    <div class="card shadow-sm border-0 mb-4 bg-white">
+        <div class="card-header bg-light border-bottom py-2 d-flex justify-content-between align-items-center">
+            <span class="fw-semibold small text-muted"><i class="bi bi-funnel me-1"></i> Filter Timetable Schedule</span>
+        </div>
+        <div class="card-body p-3">
+            <form method="post" action="viewtimetable.php" id="timetableFilterForm">
                 <input type="hidden" name="csrf_token" value="<?= e($_SESSION['csrf_token']) ?>">
-                
-                <div class="filter-grid">
-                    <div class="form-group">
-                        <label for="dept_id">🏛️ Department</label>
-                        <select name="dept_id" id="dept_id" class="form-control" onchange="this.form.submit()">
-                            <option value="all">All Departments</option>
+
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label for="dept_id" class="form-label small fw-semibold text-muted mb-1">Department:</label>
+                        <select name="dept_id" id="dept_id" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="all">-- All Departments --</option>
                             <?php 
                             if (!empty($departments['data'])) {
                                 foreach ($departments['data'] as $dept): 
                             ?>
                                 <option value="<?= $dept['id'] ?>" <?= $selected_dept_id == $dept['id'] ? 'selected' : '' ?>>
-                                    <?= e($dept['dept_shortname']) ?>
+                                    <?= e($dept['dept_fullname']) ?> (<?= e($dept['dept_shortname']) ?>)
                                 </option>
                             <?php 
                                 endforeach;
@@ -881,10 +417,10 @@ $occupied_rooms = count($distinct_rooms);
                             ?>
                         </select>
                     </div>
-                    
-                    <div class="form-group">
-                        <label for="day">📅 Day</label>
-                        <select name="day" id="day" class="form-control" onchange="this.form.submit()">
+
+                    <div class="col-md-3">
+                        <label for="day" class="form-label small fw-semibold text-muted mb-1">Weekday:</label>
+                        <select name="day" id="day" class="form-select form-select-sm" onchange="this.form.submit()">
                             <?php 
                             $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                             foreach ($days as $day): 
@@ -895,12 +431,12 @@ $occupied_rooms = count($distinct_rooms);
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    
-                    <div class="form-group">
-                        <label for="time_slot">⏰ Time Slot</label>
-                        <select name="time_slot" id="time_slot" class="form-control" onchange="this.form.submit()">
+
+                    <div class="col-md-3">
+                        <label for="time_slot" class="form-label small fw-semibold text-muted mb-1">Time Slot / Period:</label>
+                        <select name="time_slot" id="time_slot" class="form-select form-select-sm" onchange="this.form.submit()">
                             <option value="current" <?= $selected_time_slot === 'current' ? 'selected' : '' ?>>
-                                Current Time Slot
+                                ⏰ Current Live Slot
                             </option>
                             <?php foreach ($all_time_slots as $slot): ?>
                                 <?php $slot_value = $slot['start_time'] . '|' . $slot['end_time']; ?>
@@ -910,158 +446,460 @@ $occupied_rooms = count($distinct_rooms);
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    
-                    <div class="form-group">
-                        <label for="view_mode">👁️ View Mode</label>
-                        <select name="view_mode" id="view_mode" class="form-control" onchange="this.form.submit()">
+
+                    <div class="col-md-3">
+                        <label for="view_mode" class="form-label small fw-semibold text-muted mb-1">View Format:</label>
+                        <select name="view_mode" id="view_mode" class="form-select form-select-sm" onchange="this.form.submit()">
                             <option value="cards" <?= $view_mode === 'cards' ? 'selected' : '' ?>>Card View</option>
-                            <option value="table" <?= $view_mode === 'table' ? 'selected' : '' ?>>Table View</option>
+                            <option value="table" <?= $view_mode === 'table' ? 'selected' : '' ?>>Table Roster View</option>
                         </select>
                     </div>
                 </div>
             </form>
         </div>
-        
-        <!-- Current Slot -->
-        <?php if ($current_time_slot && $selected_time_slot === 'current'): ?>
-            <div class="alert-info">
-                <strong>⏰ Current Slot:</strong> <?= e($display_time_desc) ?>
-            </div>
-        <?php endif; ?>
-        
-        <!-- Classes -->
-        <?php if (empty($ongoing_classes)): ?>
-            <div class="empty-state">
-                <div class="empty-icon">📭</div>
-                <p class="empty-text">No classes scheduled for the selected time slot</p>
-            </div>
-        <?php elseif ($view_mode === 'cards'): ?>
-            <!-- CARD VIEW - DEPARTMENT-WISE GROUPING -->
-            <?php foreach ($classes_by_dept as $dept_name => $dept_data): ?>
-                <div class="dept-section">
-                    <!-- Department Header -->
-                    <div class="dept-header dept-<?= e($dept_data['dept_shortname']) ?>">
-                        <span><?= e($dept_name) ?></span>
-                        <span class="dept-badge"><?= count($dept_data['groups']) ?> Subject<?= count($dept_data['groups']) > 1 ? 's' : '' ?></span>
-                    </div>
-                    
-                    <!-- Cards Grid for this Department -->
-                    <div class="classes-grid">
-                        <?php foreach ($dept_data['groups'] as $group): ?>
-                            <div class="class-card dept-<?= e($dept_data['dept_shortname']) ?>">
-                                <div class="subject-name"><?= e($group['sub_fullname']) ?></div>
-                                <div class="subject-code"><?= e($group['subcode']) ?></div>
-                                
-                                <div class="detail-row">
-                                    <span class="detail-label">Type:</span>
-                                    <span class="detail-value">
-                                        <span class="badge badge-<?= strtolower($group['sub_type']) ?>">
-                                            <?= e($group['sub_type']) ?>
-                                        </span>
-                                    </span>
-                                </div>
-                                
-                                <div class="detail-row">
-                                    <span class="detail-label">Faculty:</span>
-                                    <span class="detail-value">
-                                        <?= !empty($group['faculties']) ? e(implode(', ', array_column($group['faculties'], 'faculty_name'))) : 'Not Assigned' ?>
-                                    </span>
-                                </div>
-                                
-                                <div class="detail-row">
-                                    <span class="detail-label">Classes:</span>
-                                    <span class="detail-value">
-                                        <?php 
-                                        // Remove duplicate classnames using array_unique
-                                        $unique_classnames = array_unique(array_column($group['classes'], 'classname'));
-                                        foreach ($unique_classnames as $classname): 
-                                        ?>
-                                            <span class="badge class-badge"><?= e($classname) ?></span>
-                                        <?php endforeach; ?>
-                                    </span>
-                                </div>
-                                
-                                <div class="detail-row">
-                                    <span class="detail-label">Rooms:</span>
-                                    <span class="detail-value">
-                                        <?php 
-                                        $rooms = array_map(function($c) {
-                                            return !empty($c['building_name']) && !empty($c['class_hall_name']) 
-                                                ? $c['class_hall_name'] 
-                                                : 'TBA';
-                                        }, $group['classes']);
-                                        echo e(implode(', ', array_unique($rooms)));
-                                        ?>
-                                    </span>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-            
-        <?php else: ?>
-            <!-- TABLE VIEW -->
-            <div class="table-responsive">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Department</th>
-                            <th>Subject</th>
-                            <th>Code</th>
-                            <th>Classes</th>
-                            <th>Faculty</th>
-                            <th>Rooms</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($classes_by_dept as $dept_name => $dept_data): ?>
-                            <?php foreach ($dept_data['groups'] as $group): ?>
-                                <tr>
-                                    <td><strong><?= e($group['dept_shortname']) ?></strong></td>
-                                    <td>
-                                        <strong><?= e($group['sub_fullname']) ?></strong><br>
-                                        <span class="badge badge-<?= strtolower($group['sub_type']) ?>">
-                                            <?= e($group['sub_type']) ?>
-                                        </span>
-                                    </td>
-                                    <td><code><?= e($group['subcode']) ?></code></td>
-                                    <td>
-                                        <?php 
-                                        // Remove duplicate classnames
-                                        $unique_classnames = array_unique(array_column($group['classes'], 'classname'));
-                                        echo e(implode(', ', $unique_classnames));
-                                        ?>
-                                    </td>
-                                    <td>
-                                        <?= !empty($group['faculties']) ? e(implode(', ', array_column($group['faculties'], 'faculty_name'))) : '-' ?>
-                                    </td>
-                                    <td>
-                                        <?php 
-                                        $rooms = array_filter(array_map(function($c) {
-                                            return !empty($c['class_hall_name']) ? $c['class_hall_name'] : null;
-                                        }, $group['classes']));
-                                        echo !empty($rooms) ? e(implode(', ', array_unique($rooms))) : 'TBA';
-                                        ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        <?php endif; ?>
     </div>
-    
-    <script>
-        // Auto-refresh every 5 minutes if showing current time
-        <?php if ($selected_time_slot === 'current'): ?>
-        setTimeout(function() {
-            window.location.reload();
-        }, 300000);
-        <?php endif; ?>
-    </script>
-</body>
-</html>
 
-<?php require_once 'hodfooter.php'; ?>
+    <!-- Live Slot Notification -->
+    <?php if ($current_time_slot && $selected_time_slot === 'current'): ?>
+        <div class="alert alert-info border-info-subtle shadow-sm mb-4 d-flex align-items-center gap-2 py-2">
+            <i class="bi bi-broadcast text-info fs-5"></i>
+            <div>
+                <strong>Active Time Slot:</strong> <?= e($display_time_desc) ?> &bull; <span class="text-muted">Displaying scheduled classes running right now.</span>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <style>
+        /* Department Section Header */
+        .dept-section {
+            margin-bottom: 2rem;
+        }
+
+        .dept-header {
+            padding: 1rem 1.25rem;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* Department-specific colors with gradients */
+        .dept-header.dept-CSE {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        }
+
+        .dept-header.dept-ECE {
+            background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%);
+        }
+
+        .dept-header.dept-EEE {
+            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+        }
+
+        .dept-header.dept-CIVIL {
+            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+        }
+
+        .dept-header.dept-MECH,
+        .dept-header.dept-ME {
+            background: linear-gradient(135deg, #E91E63 0%, #C2185B 100%);
+        }
+
+        .dept-header.dept-CHE {
+            background: linear-gradient(135deg, #00BCD4 0%, #0097A7 100%);
+        }
+
+        .dept-header.dept-IT {
+            background: linear-gradient(135deg, #673AB7 0%, #512DA8 100%);
+        }
+
+        /* Default for other departments */
+        .dept-header:not([class*="dept-CSE"]):not([class*="dept-ECE"]):not([class*="dept-EEE"]):not([class*="dept-CIVIL"]):not([class*="dept-MECH"]):not([class*="dept-ME"]):not([class*="dept-CHE"]):not([class*="dept-IT"]) {
+            background: linear-gradient(135deg, #607D8B 0%, #455A64 100%);
+        }
+
+        .dept-badge {
+            background: rgba(255, 255, 255, 0.25);
+            padding: 0.375rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+        }
+
+        /* Class Cards with Department Colors */
+        .classes-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: 1fr;
+        }
+
+        @media (min-width: 640px) {
+            .classes-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .classes-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .class-card {
+            background: white;
+            border-radius: 16px;
+            padding: 1.25rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            border-left: 5px solid #607D8B;
+            transition: all 0.3s ease;
+        }
+
+        .class-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+
+        /* Card border colors by department */
+        .class-card.dept-CSE {
+            border-left-color: #2196F3;
+        }
+
+        .class-card.dept-ECE {
+            border-left-color: #9C27B0;
+        }
+
+        .class-card.dept-EEE {
+            border-left-color: #FF9800;
+        }
+
+        .class-card.dept-CIVIL {
+            border-left-color: #4CAF50;
+        }
+
+        .class-card.dept-MECH,
+        .class-card.dept-ME {
+            border-left-color: #E91E63;
+        }
+
+        .class-card.dept-CHE {
+            border-left-color: #00BCD4;
+        }
+
+        .class-card.dept-IT {
+            border-left-color: #673AB7;
+        }
+
+        .subject-name {
+            font-size: 1.125rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+            color: #1f2937;
+        }
+
+        .subject-code {
+            font-size: 0.875rem;
+            color: #6b7280;
+            font-family: 'Courier New', monospace;
+            background: #f8fafc;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            display: inline-block;
+            margin-bottom: 1rem;
+        }
+
+        .detail-row {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.625rem;
+            font-size: 0.875rem;
+            align-items: flex-start;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #6b7280;
+            min-width: 70px;
+            flex-shrink: 0;
+        }
+
+        .detail-value {
+            color: #1f2937;
+            flex: 1;
+        }
+
+        /* Badge Styles with Modern Colors */
+        .badge-theory {
+            background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%) !important;
+            color: #1E40AF !important;
+            border: 1px solid #93C5FD !important;
+        }
+
+        .badge-lab {
+            background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%) !important;
+            color: #065F46 !important;
+            border: 1px solid #6EE7B7 !important;
+        }
+
+        .badge-tutorial {
+            background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%) !important;
+            color: #92400E !important;
+            border: 1px solid #FCD34D !important;
+        }
+
+        .badge-practical {
+            background: linear-gradient(135deg, #FCE7F3 0%, #FBCFE8 100%) !important;
+            color: #9F1239 !important;
+            border: 1px solid #F9A8D4 !important;
+        }
+
+        .badge-skill {
+            background: linear-gradient(135deg, #E0E7FF 0%, #C7D2FE 100%) !important;
+            color: #3730A3 !important;
+            border: 1px solid #A5B4FC !important;
+        }
+
+        .badge-dti {
+            background: linear-gradient(135deg, #FED7AA 0%, #FDBA74 100%) !important;
+            color: #9A3412 !important;
+            border: 1px solid #FB923C !important;
+        }
+
+        .badge-oe {
+            background: linear-gradient(135deg, #CCFBF1 0%, #99F6E4 100%) !important;
+            color: #134E4A !important;
+            border: 1px solid #5EEAD4 !important;
+        }
+
+        .badge-pe {
+            background: linear-gradient(135deg, #F3E8FF 0%, #E9D5FF 100%) !important;
+            color: #581C87 !important;
+            border: 1px solid #D8B4FE !important;
+        }
+
+        .badge-mncc {
+            background: linear-gradient(135deg, #FECACA 0%, #FCA5A5 100%) !important;
+            color: #7F1D1D !important;
+            border: 1px solid #F87171 !important;
+        }
+
+        .class-badge {
+            background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%) !important;
+            color: #374151 !important;
+            border: 1px solid #D1D5DB !important;
+            font-weight: 500;
+        }
+
+        /* Table with Modern Styling */
+        .custom-timetable-table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            background: white;
+            margin-bottom: 2rem;
+        }
+
+        .custom-timetable-table {
+            width: 100%;
+            min-width: 600px;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 0;
+        }
+
+        .custom-timetable-table th {
+            padding: 1rem 0.75rem;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            font-size: 0.8125rem;
+            font-weight: 700;
+            text-align: left;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6b7280;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .custom-timetable-table td {
+            padding: 1rem 0.75rem;
+            border-top: 1px solid #e5e7eb;
+            font-size: 0.875rem;
+        }
+
+        .custom-timetable-table tbody tr:hover {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 2rem;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            margin-bottom: 2rem;
+        }
+
+        .empty-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        .empty-text {
+            font-size: 1rem;
+            color: #6b7280;
+            font-weight: 500;
+        }
+    </style>
+
+    <!-- Classes Content -->
+    <?php if (empty($ongoing_classes)): ?>
+        <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <p class="empty-text">No classes scheduled for the selected time slot</p>
+        </div>
+    <?php elseif ($view_mode === 'cards'): ?>
+        <!-- CARD VIEW - DEPARTMENT-WISE GROUPING -->
+        <?php foreach ($classes_by_dept as $dept_name => $dept_data): ?>
+            <div class="dept-section">
+                <!-- Department Header -->
+                <div class="dept-header dept-<?= e($dept_data['dept_shortname']) ?>">
+                    <span><?= e($dept_name) ?></span>
+                    <span class="dept-badge"><?= count($dept_data['groups']) ?> Subject<?= count($dept_data['groups']) > 1 ? 's' : '' ?></span>
+                </div>
+
+                <!-- Cards Grid for this Department -->
+                <div class="classes-grid">
+                    <?php foreach ($dept_data['groups'] as $group): ?>
+                        <div class="class-card dept-<?= e($dept_data['dept_shortname']) ?>">
+                            <div class="subject-name"><?= e($group['sub_fullname']) ?></div>
+                            <div class="subject-code"><?= e($group['subcode']) ?></div>
+
+                            <div class="detail-row">
+                                <span class="detail-label">Type:</span>
+                                <span class="detail-value">
+                                    <span class="badge badge-<?= strtolower($group['sub_type']) ?>">
+                                        <?= e($group['sub_type']) ?>
+                                    </span>
+                                </span>
+                            </div>
+
+                            <div class="detail-row">
+                                <span class="detail-label">Faculty:</span>
+                                <span class="detail-value">
+                                    <?= !empty($group['faculties']) ? e(implode(', ', array_column($group['faculties'], 'faculty_name'))) : 'Not Assigned' ?>
+                                </span>
+                            </div>
+
+                            <div class="detail-row">
+                                <span class="detail-label">Classes:</span>
+                                <span class="detail-value">
+                                    <?php 
+                                    $unique_classnames = array_unique(array_column($group['classes'], 'classname'));
+                                    foreach ($unique_classnames as $classname): 
+                                    ?>
+                                        <span class="badge class-badge"><?= e($classname) ?></span>
+                                    <?php endforeach; ?>
+                                </span>
+                            </div>
+
+                            <div class="detail-row">
+                                <span class="detail-label">Rooms:</span>
+                                <span class="detail-value">
+                                    <?php 
+                                    $rooms = array_map(function($c) {
+                                        return !empty($c['building_name']) && !empty($c['class_hall_name']) 
+                                            ? $c['building_name'] . ' - ' . $c['class_hall_name']
+                                            : (!empty($c['class_hall_name']) ? $c['class_hall_name'] : 'TBA');
+                                    }, $group['classes']);
+                                    echo e(implode(', ', array_unique($rooms)));
+                                    ?>
+                                </span>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+
+    <?php else: ?>
+        <!-- TABLE VIEW -->
+        <div class="custom-timetable-table-container">
+            <table class="table custom-timetable-table">
+                <thead>
+                    <tr>
+                        <th>Department</th>
+                        <th>Subject</th>
+                        <th>Code</th>
+                        <th>Classes</th>
+                        <th>Faculty</th>
+                        <th>Rooms</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($classes_by_dept as $dept_name => $dept_data): ?>
+                        <?php foreach ($dept_data['groups'] as $group): ?>
+                            <tr>
+                                <td><strong><?= e($group['dept_shortname']) ?></strong></td>
+                                <td>
+                                    <strong><?= e($group['sub_fullname']) ?></strong><br>
+                                    <span class="badge badge-<?= strtolower($group['sub_type']) ?>">
+                                        <?= e($group['sub_type']) ?>
+                                    </span>
+                                </td>
+                                <td><code><?= e($group['subcode']) ?></code></td>
+                                <td>
+                                    <?php 
+                                    $unique_classnames = array_unique(array_column($group['classes'], 'classname'));
+                                    echo e(implode(', ', $unique_classnames));
+                                    ?>
+                                </td>
+                                <td>
+                                    <?= !empty($group['faculties']) ? e(implode(', ', array_column($group['faculties'], 'faculty_name'))) : '-' ?>
+                                </td>
+                                <td>
+                                    <?php 
+                                    $rooms = array_filter(array_map(function($c) {
+                                        return !empty($c['class_hall_name']) ? $c['class_hall_name'] : null;
+                                    }, $group['classes']));
+                                    echo !empty($rooms) ? e(implode(', ', array_unique($rooms))) : 'TBA';
+                                    ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+</div>
+
+<script>
+    // Auto-refresh every 5 minutes if showing current time
+    <?php if ($selected_time_slot === 'current'): ?>
+    setTimeout(function() {
+        window.location.reload();
+    }, 300000);
+    <?php endif; ?>
+</script>
+
+<?php
+if ($userRole === 'academic_section') {
+    require_once('academicsectionfooter.php');
+} elseif ($userRole === 'admin') {
+    require_once('adminfooter.php');
+} elseif ($userRole === 'hod') {
+    require_once('hodfooter.php');
+} elseif ($userRole === 'superadmin') {
+    require_once('superadminfooter.php');
+} else {
+    require_once('footer.php');
+}
+?>

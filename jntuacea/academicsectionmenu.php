@@ -1,3 +1,6 @@
+<?php
+require_once __DIR__ . '/services/FeatureManager.php';
+?>
 <div class="container dontprint">
     <div class="row g-1">
 
@@ -10,7 +13,7 @@
 
         <div class="col-6 col-md-2">
             <div class="dropdown w-100">
-                <button class="w-100 btn <?php echo (!empty($page_title) && in_array($page_title, ['Manage Buildings', 'Regulations', 'Course Structure', 'Syllabus', 'Curriculum Subjects'])) ? 'btn-success' : 'btn-outline-primary'; ?> dropdown-toggle"
+                <button class="w-100 btn <?php echo (!empty($page_title) && in_array($page_title, ['Manage Buildings', 'Regulations', 'Course Structure', 'Syllabus', 'Curriculum Subjects', 'Departments', 'Upload Students', 'Edit Student Profile'])) ? 'btn-success' : 'btn-outline-primary'; ?> dropdown-toggle"
                     type="button"
                     id="academicSetupDropdown"
                     data-bs-toggle="dropdown"
@@ -18,6 +21,17 @@
                     <i class="bi bi-journal-text me-1"></i> Academic Setup
                 </button>
                 <ul class="dropdown-menu w-100" aria-labelledby="academicSetupDropdown">
+                    <li>
+                        <a class="dropdown-item" href="adminfacst.php">
+                            <i class="bi bi-people me-1"></i> Class Allotment & Student Enrollment
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="uploadstudents.php">
+                            <i class="bi bi-file-earmark-arrow-up me-1"></i> Direct Bulk Upload Students
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
                     <li>
                         <a class="dropdown-item" href="academicsectionmanagebuildings.php">
                             <i class="bi bi-building me-1"></i> Buildings & Halls
@@ -49,7 +63,7 @@
 
         <div class="col-6 col-md-2">
             <div class="dropdown w-100">
-                <button class="w-100 btn <?php echo (!empty($page_title) && in_array($page_title, ['View Attendance'])) ? 'btn-success' : 'btn-outline-primary'; ?> dropdown-toggle"
+                <button class="w-100 btn <?php echo (!empty($page_title) && in_array($page_title, ['View Attendance', 'Live Timetable', 'Faculty Weekly Timetable'])) ? 'btn-success' : 'btn-outline-primary'; ?> dropdown-toggle"
                     type="button"
                     id="academicViewsDropdown"
                     data-bs-toggle="dropdown"
@@ -60,6 +74,11 @@
                     <li>
                         <a class="dropdown-item" href="academicsectionshowallclsattendance.php">
                             <i class="bi bi-calendar-check me-1"></i> View Attendance
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="viewtimetable.php">
+                            <i class="bi bi-clock-history me-1"></i> Campus Timetable & Room Usage
                         </a>
                     </li>
                     <li>
@@ -86,23 +105,27 @@
                             <i class="bi bi-file-earmark-arrow-up me-1"></i> Publish Results
                         </a>
                     </li>
+                    <?php if (\FeatureManager::isModuleEnabled('MOD_STUDENT_PROFILE')): ?>
                     <li>
                         <a class="dropdown-item" href="adminstudentprofiles.php">
                             <i class="bi bi-person-badge me-1"></i> Student Profiles & Vault
                         </a>
                     </li>
+                    <?php endif; ?>
+                    <?php if (\FeatureManager::isModuleEnabled('MOD_CERTIFICATES')): ?>
                     <li>
                         <a class="dropdown-item" href="admincustodyledger.php">
                             <i class="bi bi-journal-bookmark me-1"></i> Custody & Certificates
                         </a>
                     </li>
+                    <?php endif; ?>
                 </ul>
             </div>
         </div>
 
         <div class="col-6 col-md-2">
             <div class="dropdown w-100">
-                <button class="w-100 btn <?php echo (!empty($page_title) && in_array($page_title, ['Reset Student Pwd', 'Reset Faculty Pwd', 'Change Pwd'])) ? 'btn-success' : 'btn-outline-primary'; ?> dropdown-toggle"
+                <button class="w-100 btn <?php echo (!empty($page_title) && in_array($page_title, ['Reset Student Pwd', 'Change Pwd'])) ? 'btn-success' : 'btn-outline-primary'; ?> dropdown-toggle"
                     type="button"
                     id="accountActionsDropdown"
                     data-bs-toggle="dropdown"
@@ -113,11 +136,6 @@
                     <li>
                         <a class="dropdown-item" href="academicsectionresetstudentpwd.php">
                             <i class="bi bi-person me-1"></i> Reset Student Pwd
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item" href="academicsectionresetfacultypwd.php">
-                            <i class="bi bi-briefcase me-1"></i> Reset Faculty Pwd
                         </a>
                     </li>
                     <li>

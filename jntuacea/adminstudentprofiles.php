@@ -14,7 +14,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 $role = $_SESSION['role'] ?? '';
-if (!in_array($role, ['superadmin', 'admin', 'academic_section', 'academicsection'], true)) {
+if (!in_array($role, ['superadmin', 'admin', 'academic_section', 'academicsection', 'hod'], true)) {
     header('Location: ./');
     exit();
 }
@@ -32,6 +32,8 @@ if ($role === 'superadmin') {
     require_once __DIR__ . '/superadminmenu.php';
 } elseif ($role === 'admin') {
     require_once __DIR__ . '/adminmenu.php';
+} elseif ($role === 'hod') {
+    require_once __DIR__ . '/hodmenu.php';
 } else {
     require_once __DIR__ . '/academicsectionmenu.php';
 }
@@ -39,27 +41,33 @@ if ($role === 'superadmin') {
 $service = \Services\StudentProfileService::getInstance();
 $db = \DBCredentials::getInstance()->getConnection();
 $userId = (int)($_SESSION['userid'] ?? $_SESSION['id'] ?? $_SESSION['user_id'] ?? 0);
+$isHod = ($role === 'hod');
+$hodDeptId = $isHod ? (int)($_SESSION['dept_id'] ?? 0) : 0;
 
 $msg = "";
 $err = "";
 
-// Handle Verification Actions
+// Handle Verification Actions (Academic Section / Admin only; HOD cannot verify sensitive documents)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    \FeatureManager::requireWriteAccess('MOD_STUDENT_PROFILE');
-    if ($_POST['action'] === 'verify_profile') {
-        $vRoll = trim($_POST['roll_no'] ?? '');
-        if ($service->verifyProfile($vRoll, $userId)) {
-            $msg = "Student profile for $vRoll marked as VERIFIED.";
-        } else {
-            $err = "Failed to verify profile.";
-        }
-    } elseif ($_POST['action'] === 'verify_doc') {
-        $docId = (int)($_POST['doc_id'] ?? 0);
-        $vRemarks = trim($_POST['remarks'] ?? 'Verified by Academic Section');
-        if ($service->verifyDocument($docId, $userId, $vRemarks)) {
-            $msg = "Document #$docId verified successfully.";
-        } else {
-            $err = "Failed to verify document.";
+    if ($isHod) {
+        $err = "Access denied: Sensitive document verification is restricted to Academic Section.";
+    } else {
+        \FeatureManager::requireWriteAccess('MOD_STUDENT_PROFILE');
+        if ($_POST['action'] === 'verify_profile') {
+            $vRoll = trim($_POST['roll_no'] ?? '');
+            if ($service->verifyProfile($vRoll, $userId)) {
+                $msg = "Student profile for $vRoll marked as VERIFIED.";
+            } else {
+                $err = "Failed to verify profile.";
+            }
+        } elseif ($_POST['action'] === 'verify_doc') {
+            $docId = (int)($_POST['doc_id'] ?? 0);
+            $vRemarks = trim($_POST['remarks'] ?? 'Verified by Academic Section');
+            if ($service->verifyDocument($docId, $userId, $vRemarks)) {
+                $msg = "Document #$docId verified successfully.";
+            } else {
+                $err = "Failed to verify document.";
+            }
         }
     }
 }
@@ -69,6 +77,10 @@ $searchRoll = trim($_GET['roll_no'] ?? '');
 $filterDept = isset($_GET['dept_id']) ? (int)$_GET['dept_id'] : 0;
 $filterClass = isset($_GET['class_id']) ? (int)$_GET['class_id'] : 0;
 
+if ($isHod) {
+    $filterDept = $hodDeptId;
+}
+
 $profile = null;
 $documents = [];
 $custodyRecords = [];
@@ -76,8 +88,13 @@ $custodyRecords = [];
 if (!empty($searchRoll)) {
     $profile = $service->getProfile($searchRoll);
     if ($profile) {
-        $documents = $service->getDocuments($searchRoll);
-        $custodyRecords = $service->getCustodialRecords($searchRoll);
+        if ($isHod && (int)($profile['dept_id'] ?? 0) !== $hodDeptId) {
+            $profile = null;
+            $err = "Access denied: Student with Roll Number " . htmlspecialchars($searchRoll) . " belongs to another department.";
+        } else {
+            $documents = $service->getDocuments($searchRoll);
+            $custodyRecords = $service->getCustodialRecords($searchRoll);
+        }
     } else {
         $err = "No student found with Roll Number / Username: " . htmlspecialchars($searchRoll);
     }
@@ -85,7 +102,12 @@ if (!empty($searchRoll)) {
 
 // Fetch departments for filter
 $depts = [];
-$dRes = $db->query("SELECT id, dept_fullname AS dept_name, dept_shortname FROM departments ORDER BY dept_fullname ASC");
+$dSql = "SELECT id, dept_fullname AS dept_name, dept_shortname FROM departments";
+if ($isHod) {
+    $dSql .= " WHERE id = " . $hodDeptId;
+}
+$dSql .= " ORDER BY dept_fullname ASC";
+$dRes = $db->query($dSql);
 if ($dRes) {
     while ($r = $dRes->fetch_assoc()) {
         $depts[] = $r;
@@ -94,7 +116,12 @@ if ($dRes) {
 
 // Fetch active classes for filter
 $classes = [];
-$cRes = $db->query("SELECT c.id, c.classname, s.dept_id FROM classes c LEFT JOIN specialization s ON c.spec_id = s.id ORDER BY c.classname ASC");
+$cSql = "SELECT c.id, c.classname, s.dept_id FROM classes c LEFT JOIN specialization s ON c.spec_id = s.id";
+if ($isHod) {
+    $cSql .= " WHERE s.dept_id = " . $hodDeptId;
+}
+$cSql .= " ORDER BY c.classname ASC";
+$cRes = $db->query($cSql);
 if ($cRes) {
     while ($r = $cRes->fetch_assoc()) {
         $classes[] = $r;
@@ -156,13 +183,15 @@ if (empty($profile)) {
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
         <div>
             <h4 class="mb-0 text-primary"><i class="bi bi-person-badge-fill me-2"></i>Student Profiles & Document Dossier</h4>
-            <small class="text-muted">Master Student Profiles, Document Vault & Verification Cockpit</small>
+            <small class="text-muted"><?= $isHod ? 'Departmental Student Profiles & Digital Records' : 'Master Student Profiles, Document Vault & Verification Cockpit' ?></small>
         </div>
         <div class="d-flex gap-2">
+            <?php if (!$isHod): ?>
             <a href="admincustodyledger.php" class="btn btn-outline-success btn-sm">
                 <i class="bi bi-journal-bookmark me-1"></i> Custodial Ledger & Certificates
             </a>
-            <a href="academicsectionresults.php" class="btn btn-outline-secondary btn-sm">
+            <?php endif; ?>
+            <a href="<?= $isHod ? 'hodresults.php' : 'academicsectionresults.php' ?>" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-file-earmark-spreadsheet me-1"></i> Exam Results
             </a>
         </div>
@@ -193,14 +222,19 @@ if (empty($profile)) {
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <select name="dept_id" class="form-select">
-                        <option value="0">-- All Departments --</option>
+                    <select name="dept_id" class="form-select" <?= $isHod ? 'disabled' : '' ?>>
+                        <?php if (!$isHod): ?>
+                            <option value="0">-- All Departments --</option>
+                        <?php endif; ?>
                         <?php foreach ($depts as $d): ?>
                             <option value="<?= $d['id'] ?>" <?= $filterDept === (int)$d['id'] ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($d['dept_name']) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
+                    <?php if ($isHod): ?>
+                        <input type="hidden" name="dept_id" value="<?= $hodDeptId ?>">
+                    <?php endif; ?>
                 </div>
                 <div class="col-md-3">
                     <select name="class_id" class="form-select">
@@ -242,7 +276,7 @@ if (empty($profile)) {
                 <div class="d-flex gap-2 align-items-center">
                     <?php if (!empty($profile['is_verified']) && (int)$profile['is_verified'] === 1): ?>
                         <span class="badge bg-success fs-6 p-2"><i class="bi bi-patch-check-fill me-1"></i> Profile Verified</span>
-                    <?php else: ?>
+                    <?php elseif (!$isHod): ?>
                         <form action="adminstudentprofiles.php?roll_no=<?= urlencode($searchRoll) ?>" method="POST" class="d-inline">
                             <input type="hidden" name="action" value="verify_profile">
                             <input type="hidden" name="roll_no" value="<?= htmlspecialchars($profile['roll_no']) ?>">
@@ -250,10 +284,14 @@ if (empty($profile)) {
                                 <i class="bi bi-check2-circle me-1"></i> Mark Profile Verified
                             </button>
                         </form>
+                    <?php else: ?>
+                        <span class="badge bg-warning text-dark fs-6 p-2"><i class="bi bi-hourglass-split me-1"></i> Verification Pending (Academic Section)</span>
                     <?php endif; ?>
+                    <?php if (!$isHod): ?>
                     <a href="admincustodyledger.php?search=<?= urlencode($profile['roll_no']) ?>" class="btn btn-outline-info btn-sm">
                         <i class="bi bi-journal-bookmark me-1"></i> Custody Ledger
                     </a>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -367,7 +405,7 @@ if (empty($profile)) {
                                                 <a href="viewdocument.php?id=<?= (int)$doc['id'] ?>" target="_blank" class="btn btn-outline-primary btn-sm" title="View Document">
                                                     <i class="bi bi-eye"></i> View
                                                 </a>
-                                                <?php if (empty($doc['is_verified'])): ?>
+                                                <?php if (!$isHod && empty($doc['is_verified'])): ?>
                                                     <form action="adminstudentprofiles.php?roll_no=<?= urlencode($searchRoll) ?>" method="POST" class="d-inline">
                                                         <input type="hidden" name="action" value="verify_doc">
                                                         <input type="hidden" name="doc_id" value="<?= $doc['id'] ?>">

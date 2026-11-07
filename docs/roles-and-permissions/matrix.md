@@ -2,7 +2,7 @@
 
 This document provides a matrix of features, administrative capabilities, module dependencies, granular action permissions (`view`, `edit`, `approve`, `export`), and page access rules across all six primary system roles in **JNTUACEA** and **JNTUACEASTUDENTS**.
 
-For the exhaustive file-by-file and 90-table read/write mapping, consult [user_feature_file_table_mapping.md](./user_feature_file_table_mapping.md).
+For the exhaustive file-by-file and 92-table read/write mapping, consult [user_feature_file_table_mapping.md](./user_feature_file_table_mapping.md).
 
 ---
 
@@ -11,6 +11,8 @@ For the exhaustive file-by-file and 90-table read/write mapping, consult [user_f
 | Feature / Capability | SuperAdmin | Admin (Principal) | Academic Section | HOD | Faculty | Student | Feature Toggle Module |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **Autonomous Academic Settings** | ✅ Full | 👁️ Read | 👁️ Read | 👁️ Read | 👁️ Read | ❌ | - |
+| **Regulation CIA Schemes & Policy Settings** | ✅ Full | 👁️ Read | ✅ Full | 👁️ Read | 👁️ Read | ❌ | `MOD_CIA_MARKS` |
+| **Course Results Readiness Console** | ✅ Full | ✅ Full | ✅ Full | 👁️ Read | 👁️ Read | ❌ | - |
 | **Feature Toggle & Action RBAC (`role_module_permissions`)** | ✅ Full | ❌ | ❌ | ❌ | ❌ | ❌ | - |
 | **Attainment Profiles & Subject Overrides** | ✅ Full | ❌ | ❌ | ❌ | ❌ | ❌ | `MOD_SEE_MARKS` |
 | **AI Providers Configuration** | ✅ Full | ❌ | ❌ | ❌ | ❌ | ❌ | `MOD_AI_ASSISTANCE` |
@@ -24,7 +26,7 @@ For the exhaustive file-by-file and 90-table read/write mapping, consult [user_f
 | **Campus Buildings & Halls** | ❌ | ❌ | ✅ Full | ❌ | ❌ | ❌ | - |
 | **Syllabus Document Management** | ❌ | ❌ | ✅ Full | 👁️ Read | 👁️ Read | ❌ | - |
 | **Faculty Onboarding & Dept Sort Order** | ❌ | ✅ Full | ❌ | 👁️ Read | ❌ | ❌ | - |
-| **Student Enrollment & Status** | ❌ | ✅ Full | 👁️ Read | 👁️ Read | ❌ | 👁️ Self | - |
+| **Student Enrollment & Status** | ✅ Full | ✅ Full | ✅ Full | 👁️ Read | ❌ | 👁️ Self | - |
 | **Faculty Password Reset** | ❌ | ✅ Full | ✅ Full | ❌ | ❌ | ❌ | - |
 | **Student Password Reset** | ❌ | ✅ Full | ✅ Full | ❌ | ❌ | ❌ | - |
 | **Department Timetable Management** | ❌ | ❌ | ❌ | ✅ Full | 👁️ Read | 👁️ Read | - |
@@ -40,6 +42,7 @@ For the exhaustive file-by-file and 90-table read/write mapping, consult [user_f
 | **Batch OBE, Vision/Mission & PEOs** | ✅ Full | 👁️ Read | ❌ | 👁️ Read | 👁️ Read | ❌ | `MOD_BATCH_GOVERNANCE` |
 | **Batch Macro-Attainment Calculation**| ✅ Full | 👁️ Read | ❌ | 👁️ Read | 👁️ Read | ❌ | `MOD_BATCH_GOVERNANCE` |
 | **Exam Results Publication (`DRAFT` &rarr; `PUBLISHED`)** | ✅ Full | ✅ Full | ✅ Full | ❌ | ⚡ Auto-Sync | 👁️ Self | `MOD_RESULTS_PUBLISH` |
+| **Department Exam Results Review** | ✅ Full | ✅ Full | ✅ Full | ✅ Full | 👁️ Read | 👁️ Self | `MOD_RESULTS_PUBLISH` |
 | **Independent Attainment CSV Import** | ✅ Full | ✅ Full | ✅ Full | ✅ Dept | ✅ Subj | ❌ | `MOD_SEE_MARKS` |
 | **Student Profiles & Biographical Dossier**| ✅ Full | ✅ Full | ✅ Full | 👁️ Read | ❌ | ✅ Edit Self | `MOD_STUDENT_PROFILE` |
 | **Private Student Document Vault** | ✅ Full | ✅ Full | ✅ Full | 👁️ Read | ❌ | ✅ Upload Self| `MOD_STUDENT_PROFILE` |
@@ -48,6 +51,9 @@ For the exhaustive file-by-file and 90-table read/write mapping, consult [user_f
 | **Lesson Plan Formulation & Upload** | ❌ | ❌ | ❌ | 👁️ Dept | ✅ Full | ❌ | `MOD_LESSON_PLAN` |
 | **Lesson Plan Reconciliation & Audit**| ❌ | 👁️ Read | ❌ | ✅ Approve | ✅ Submit | ❌ | `MOD_LESSON_PLAN` |
 | **Internal Assessment (CIA) Marks** | ❌ | ❌ | ❌ | 👁️ Read | ✅ Full | ❌ | `MOD_CIA_MARKS` |
+| **Laboratory Bulk Day-to-Day Marks** | ❌ | ❌ | ❌ | 👁️ Read | ✅ Full | ❌ | `MOD_CIA_MARKS` |
+| **Design Thinking & Innovation (DTI) CIA** | ❌ | ❌ | ❌ | 👁️ Read | ✅ Full | ❌ | `MOD_CIA_MARKS` |
+| **Postgraduate (PG) CIA Marks** | ❌ | ❌ | ❌ | 👁️ Read | ✅ Full | ❌ | `MOD_CIA_MARKS` |
 | **CIA Exam Paper Attachments** | ❌ | ❌ | ❌ | 👁️ Read | ✅ Full | ❌ | `MOD_CIA_METADATA` |
 | **Semester End Exam (SEE) Marks** | ❌ | 👁️ Read | ❌ | 👁️ Read | ✅ Full | ❌ | `MOD_SEE_MARKS` |
 | **CO-PO Formulation & Mapping** | 👁️ Read | 👁️ Read | ❌ | 👁️ Read | ✅ Full | ❌ | `MOD_CO_PO` |
@@ -60,6 +66,7 @@ For the exhaustive file-by-file and 90-table read/write mapping, consult [user_f
 | **PO/PSO Program Articulation Matrix**| ✅ Full | 👁️ Read | ❌ | ✅ Full | 👁️ Read | ❌ | `MOD_PO_PSO_ATTAINMENT` |
 | **Continuous Laboratory Rubrics** | ❌ | ❌ | ❌ | 👁️ Read | ✅ Full | ❌ | `MOD_LAB_RUBRICS` |
 | **Student Attendance Risk Gauge** | ❌ | ❌ | ❌ | ❌ | ❌ | 👁️ Self | `MOD_STUDENT_ATTENDANCE_RISK` |
+| **Student Course-Wise Attendance Register** | ✅ Full | ✅ Full | ✅ Full | 👁️ Dept | 👁️ Subj | 👁️ Self | `MOD_ATTENDANCE` |
 | **CQI Action Tracker & ATR PDF** | ✅ Full | 👁️ Read | ❌ | ✅ Approve/Close | ✅ Execute | ❌ | `MOD_CQI_ACTION_TRACKING` |
 | **Opaque Token Certificate Verification** | ✅ Full | ✅ Full | ✅ Full | 👁️ Read | ❌ | 👁️ Self | `MOD_CERTIFICATE_QR` |
 | **Longitudinal Multi-Batch Analytics**| ✅ Full | 👁️ Read | ❌ | 👁️ Read | ❌ | ❌ | `MOD_BATCH_OBE` |
@@ -78,6 +85,7 @@ For the exhaustive file-by-file and 90-table read/write mapping, consult [user_f
 - `superadminhome.php`
 - `superadminfeatures.php` (Feature Toggle Management, Visibility Matrix & `role_module_permissions` Action Matrix)
 - `superadminacademicsettings.php`
+- `cia_policy.php` (Regulation CIA Schemes, Mid Weightages & Statutory Rules)
 - `superadminattainmentsettings.php` (Attainment Profiles & Subject Overrides)
 - `superadminaiproviders.php` (Optional AI Provider Configuration)
 - `superadminacademicyears.php`
@@ -102,11 +110,12 @@ For the exhaustive file-by-file and 90-table read/write mapping, consult [user_f
 - `adminhome.php`
 - `adminfacst.php` (Department Operations Gateway: HOD, Faculty, Classes)
 - `adminfac.php` (Faculty Roster, Onboarding & Department-Wise Custom Sort Order `faculties.sort_order`), `adminaddfaculty.php`, `admineditfaculty.php`, `adminfacultyprofile.php`, `hod_profile.php`, `edit_hod.php`
-- `adminviewclasses.php`
-- `adminenrollstudents.php`, `adminunenrollstudents.php`, `adminviewstudents.php`, `editstudent.php`, `adminuploadst.php`
+- `viewclasses.php` (Legacy shim: `adminviewclasses.php`)
+- `enrollstudents.php`, `unenrollstudents.php`, `viewstudents.php`, `editstudent.php`, `uploadstudents.php` (Legacy shims: `adminenrollstudents.php`, `adminunenrollstudents.php`, `adminviewstudents.php`, `adminuploadst.php`)
 - `adminstudentprofiles.php`, `viewdocument.php` (Comprehensive Student Dossier & Document Inspection)
 - `admincustodyledger.php`, `viewcertificate.php` (Physical Custody Ledger & Certificate Approvals)
 - `academicsectionresults.php`, `attainmentimport.php` (Institutional Exam Results & Attainment Imports)
+- `cia_policy.php` (Regulation CIA Scheme Oversight)
 - `adminresetfacultypwd.php`, `adminresetstudentpwd.php`
 - `adminshowattendance.php`, `adminshowallclsattendance.php`, `adminshowclsattendance.php`, `adminshowfacattendance.php`, `download_attendance.php`, `download_attendance_gazette.php`, `export_attendance_excel.php`
 - `adminciaanalysis2.php`
@@ -115,11 +124,19 @@ For the exhaustive file-by-file and 90-table read/write mapping, consult [user_f
 
 ### 2.3 Academic Section (`$_SESSION['role'] === 'academic_section'`)
 - `academicsectionhome.php`
+- `adminfacst.php` (Academic Operations Hub: Class Allotment & Student Enrollment Gateway)
+- `viewclasses.php` (Specialization-wise and Academic Year class rosters; legacy shim: `adminviewclasses.php`)
+- `enrollstudents.php` (Student Enrollment: Bulk CSV upload & carry-forward import from previous semester; legacy shim: `adminenrollstudents.php`)
+- `viewstudents.php` (Enrolled student roster, inline editing, activation/inactivation, password reset, single student manual entry; legacy shim: `adminviewstudents.php`)
+- `unenrollstudents.php` (Student unenrollment and removal from class; legacy shim: `adminunenrollstudents.php`)
+- `uploadstudents.php` (Direct bulk CSV student upload and enrollment hub; legacy shim: `adminuploadst.php`)
+- `editstudent.php` (Student profile and enrollment record editing)
 - `academicsectioncoursestructure.php` (Autonomous Course Structure & BoS Engine)
 - `academicsectioncurriculumsubjects.php`, `curriculum_subject_ajax.php` (Curriculum Subject Catalog, Credits, Auto-Defaults & Master COs)
 - `academicsectionmanagebuildings.php`, `managebuildings_public.php`
 - `academicsectionsyllabus.php`
 - `academicsectionregulations.php`, `academicsectionattendancerules.php` (Academic Regulations Reference Hub)
+- `cia_policy.php` (Regulation CIA Schemes & Evaluation Scheme Management)
 - `academicsectionresults.php` (Exam Notifications, CSV Preview/Import, Review & Publication)
 - `attainmentimport.php` (External Attainment CSV Import)
 - `adminstudentprofiles.php`, `viewdocument.php` (Student Biographical Profiles & Verification)
@@ -130,7 +147,7 @@ For the exhaustive file-by-file and 90-table read/write mapping, consult [user_f
 
 ### 2.4 Head of Department (`$_SESSION['role'] === 'hod'`)
 - `hodhome.php`, `hod_profile.php`
-- `hodmanage_timetable.php`, `faculty_weekly_timetable.php`, `viewtimetable.php`
+- `hodmanage_timetable.php`, `hodtimetable.php`, `faculty_weekly_timetable.php`, `viewtimetable.php`
 - `hodmapfaculty.php`, `hodviewfaculties.php`, `hodfacultyprofile.php`, `hodeditfaculty.php`
 - `hodmapstudents.php`, `hodviewstudents.php`
 - `hodviewdelrequests.php`, `hodviewattendance_todel.php` (Row-locked attendance deletion approvals & audit trail)
@@ -139,6 +156,7 @@ For the exhaustive file-by-file and 90-table read/write mapping, consult [user_f
 - `hodshowallclsattendance.php`, `hodshowclsattendance.php`, `hodshowfacattendance.php`, `hodshowattendance.php`, `download_attendance_gazette.php`
 - `hodfacaddattendance.php` (Direct/substitute attendance marking)
 - `hodshowcls_cia.php`, `download_cls_cia.php` (CIA ledger reviews)
+- `hodresults.php` (Department Examination Results & Grade Distribution Oversight)
 - `hodciaanalysis2.php`, `attainmentimport.php`, `reviewqueue.php`, `download_atr.php`, `aiassistance.php`
 - `hodviewfeedback.php`
 - `hodchgpwd.php`
@@ -151,7 +169,7 @@ For the exhaustive file-by-file and 90-table read/write mapping, consult [user_f
 - `facadddelattrequest.php`, `facshowdelattrequests.php`
 - `facaddciamarks.php`, `faceditciamarks.php`, `facviewciamarks.php`, `facciamarks.php`, `facciamarkscondensed.php`, `facdticiamarkscondensed.php`, `facadddticiamarks.php`, `facbulkd2dmarks.php`, `facgroupedcia.php`, `facviewmarks.php`, `facviewmarkscsv.php`
 - `facaddcialabmarks.php`, `faceditcialabmarks.php`, `facviewcialabmarks.php`, `facuglabciamarkscondensed.php`
-- `facaddpgciamarks.php`, `faceditpgciamarks.php`, `facviewpgciamarks.php`
+- `facaddpgciamarks.php`, `faceditpgciamarks.php`, `facviewpgciamarks.php`, `pg_cia_form.php`, `pg_cia_components.php`
 - `facaddprojectciamarks.php`, `facviewprojectciamarks.php`
 - `facciaattachments.php` (Question paper and key document uploads)
 - `facseemarks.php`, `facseemarksentry.php`, `facseedirectmarks.php`, `facseecompques.php`, `facseemarkscondensed.php`, `attainmentimport.php`
@@ -169,7 +187,8 @@ For the exhaustive file-by-file and 90-table read/write mapping, consult [user_f
 - `studentresults.php` (Semester Grade Cards, Fractional SGPA & Examination Results)
 - `studentcertificates.php`, `viewcertificate.php` (Request & Print Custodial, TC, Study/Conduct, Bonafide, No Dues)
 - `studentsubjects.php` (Registered Subjects, Faculty Roster & Exam Result Badges)
-- `studentsubatt.php`, `studentsubatt1.php` (Detailed Subject-Wise Attendance Breakdown, CIA Marks & SEE Results)
+- `studentsubatt.php`, `studentsubatt1.php`, `studentsubjectatt.php` (Detailed Subject-Wise Attendance Breakdown, CIA Marks & SEE Results)
+- `studentcourseatt.php` (Course-Wise Attendance Summary Register)
 - `studenttimetable.php` (Class Weekly Timetable)
 - `studentfeedback.php`, `studentfeedbacksubjects.php`, `student_faculty_feedback.php`, `student_co_feedback.php`, `student_ces_feedback.php`
 - `stknowledgebase.php` (Student Help Manual)

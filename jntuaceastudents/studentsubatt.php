@@ -7,16 +7,13 @@ if (session_status() !== PHP_SESSION_ACTIVE) { session_start(); }
 require_once("logger.php");
 logRequest();
 ?>
-
-<!DOCTYPE html>
-<!-- saved from url=(0061)https://jntuaceastudents.classattendance.in/studentsubatt.php -->
-<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    
+<html lang="en"><head>
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>JNTUACEA - Academic Record Book</title>
-    <link rel="icon" href="https://jntuaceastudents.classattendance.in/favicon.png" sizes="16x16" type="image/png">
-    <link href="./JNTUACEA - Academic Record Book_files/bootstrap.min.css" rel="stylesheet" integrity="sha384-GLhlTQ8iRABdZLl6O3oVMWSktQOp6b7In1Zl3/Jr59b6EGGoI1aFkw7cmDA6j6gD" crossorigin="anonymous">
-    <link href="./JNTUACEA - Academic Record Book_files/bootstrap-icons.css" rel="stylesheet">
+    <link rel="icon" href="favicon.png" sizes="16x16" type="image/png">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-GLhlTQ8iRABdZLl6O3oVMWSktQOp6b7In1Zl3/Jr59b6EGGoI1aFkw7cmDA6j6gD" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <style type="text/css">
         html {
             position: relative;
@@ -89,7 +86,7 @@ logRequest();
             }
         }
     </style>
-    <script src="./JNTUACEA - Academic Record Book_files/api.js" async="" defer=""></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async="" defer=""></script>
     <script>
         window.history.pushState(null, null, window.location.href);
     </script>
@@ -107,7 +104,7 @@ const original=window.fetch;if(original)window.fetch=function(input,options){opt
         <div class="container d-flex justify-content-center">
             <div class="row align-items-center">
                 <div class="col-auto">
-                    <img src="./JNTUACEA - Academic Record Book_files/jntuacea.png" alt="JNTUACEA" width="311" height="259" class="img-fluid responsive-img">
+                    <img src="images/jntuacea.png" alt="JNTUACEA" width="311" height="259" class="img-fluid responsive-img">
                 </div>
                 <div class="col-auto p-0">
                     <span class="text-primary d-block responsive-text p-0">JNTUA College of Engineering Ananthapuramu</span>
@@ -119,16 +116,16 @@ const original=window.fetch;if(original)window.fetch=function(input,options){opt
     </div><div class="container dontprint">
     <div class="row g-1">
                     <div class="col-6 col-sm p-0">
-                <a href="https://jntuaceastudents.classattendance.in/studenthome.php" class="w-100 btn btn-outline-primary">Home</a>
+                <a href="studenthome.php" class="w-100 btn btn-outline-primary">Home</a>
             </div>
                     <div class="col-6 col-sm p-0">
-                <a href="https://jntuaceastudents.classattendance.in/studentfeedback.php" class="w-100 btn btn-outline-primary">Feedback</a>
+                <a href="studentfeedback.php" class="w-100 btn btn-outline-primary">Feedback</a>
             </div>
                     <div class="col-6 col-sm p-0">
-                <a href="https://jntuaceastudents.classattendance.in/stchgpwd.php" class="w-100 btn btn-outline-primary">Change Password</a>
+                <a href="stchgpwd.php" class="w-100 btn btn-outline-primary">Change Password</a>
             </div>
                     <div class="col-6 col-sm p-0">
-                <a href="https://jntuaceastudents.classattendance.in/logout.php" class="w-100 btn btn-outline-danger">Logout</a>
+                <a href="logout.php" class="w-100 btn btn-outline-danger">Logout</a>
             </div>
             </div>
 </div>
@@ -143,7 +140,7 @@ const original=window.fetch;if(original)window.fetch=function(input,options){opt
                 <small>Academic Year: 2026-2027</small>
             </div>
             <div class="float-end">
-                <a href="https://jntuaceastudents.classattendance.in/studenthome.php" class="btn btn-sm btn-outline-primary">Home</a>
+                <a href="studenthome.php" class="btn btn-sm btn-outline-primary">Home</a>
             </div>
         </div>
         <div class="card-header">
@@ -335,7 +332,7 @@ lowered. </td></tr><tr><td>28-08-2026</td><td>9:30 AM - 10:30 AM</td><td>-- Pyth
         </div>
     </div>
 </div>
-<script src="./JNTUACEA - Academic Record Book_files/bootstrap.bundle.min.js" integrity="sha384-w76AqPfDkMBDXo30jS1Sgez6pr3x5MlQ1ZAGC+nuZB+EYdgRZgiwxhTBTkF7CXvN" crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js" integrity="sha384-w76AqPfDkMBDXo30jS1Sgez6pr3x5MlQ1ZAGC+nuZB+EYdgRZgiwxhTBTkF7CXvN" crossorigin="anonymous">
 </script>
 
 

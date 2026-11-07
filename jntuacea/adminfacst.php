@@ -3,8 +3,18 @@ require_once __DIR__ . '/bootstrap.php';
 
 if (session_status() !== PHP_SESSION_ACTIVE) { session_start(); }
 
+$userRole = $_SESSION['role'] ?? '';
+if (!in_array($userRole, ['admin', 'academic_section', 'superadmin'], true)) {
+    header('Location: ./');
+    exit();
+}
+
 $page_title = "Departments";
-require_once("adminheader.php");
+if ($userRole === 'academic_section') {
+    require_once("academicsectionheader.php");
+} else {
+    require_once("adminheader.php");
+}
 require_once("admin.class.php");
 
 $obj = new Admin();
@@ -23,12 +33,16 @@ $_SESSION['secretcode'] = bin2hex(random_bytes(32));
                         <i class="bi bi-building text-primary me-2"></i>Academic Departments Operations Hub
                     </h4>
                     <p class="text-muted mb-0 small">
-                        Principal's executive overview. Access department-wise leadership (HOD), teaching faculty rosters, and class cohorts with student enrollment.
+                        <?php if ($userRole === 'academic_section'): ?>
+                            Academic Section Operations Hub. Manage department class cohorts and student enrollment rosters across institutional programs.
+                        <?php else: ?>
+                            Principal's executive overview. Access department-wise leadership (HOD), teaching faculty rosters, and class cohorts with student enrollment.
+                        <?php endif; ?>
                     </p>
                 </div>
                 <div>
                     <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2">
-                        <i class="bi bi-shield-check me-1"></i>Institutional Leadership
+                        <i class="bi bi-shield-check me-1"></i><?= ($userRole === 'academic_section') ? 'Academic Operations' : 'Institutional Leadership'; ?>
                     </span>
                 </div>
             </div>
@@ -73,16 +87,22 @@ $_SESSION['secretcode'] = bin2hex(random_bytes(32));
                                     <small class="text-muted">ID: #<?= (int)$dept['id']; ?></small>
                                 </td>
                                 <td class="text-center">
-                                    <form action="hod_profile.php" method="post" class="d-inline">
-                                        <input type="hidden" name="dept_id" value="<?= $dept['id']; ?>" />
-                                        <input type="hidden" name="dept_fullname" value="<?= htmlspecialchars($deptFull, ENT_QUOTES); ?>" />
-                                        <button type="submit" class="btn btn-sm btn-outline-secondary w-100" title="View / Update HOD Details">
-                                            <i class="bi bi-person-badge me-1"></i> HOD Details
-                                        </button>
-                                    </form>
+                                    <?php if ($userRole === 'academic_section'): ?>
+                                        <span class="badge bg-light text-secondary border">Admin Only</span>
+                                    <?php else: ?>
+                                        <form action="hod_profile.php" method="post" class="d-inline">
+                                            <input type="hidden" name="dept_id" value="<?= $dept['id']; ?>" />
+                                            <input type="hidden" name="dept_fullname" value="<?= htmlspecialchars($deptFull, ENT_QUOTES); ?>" />
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary w-100" title="View / Update HOD Details">
+                                                <i class="bi bi-person-badge me-1"></i> HOD Details
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="text-center">
-                                    <?php if ($hasFaculty): ?>
+                                    <?php if ($userRole === 'academic_section'): ?>
+                                        <span class="badge bg-light text-secondary border"><?= $hasFaculty ? 'Admin Only' : 'N/A'; ?></span>
+                                    <?php elseif ($hasFaculty): ?>
                                         <form action="adminfac.php" method="post" class="d-inline">
                                             <input type="hidden" name="dept_id" value="<?= $dept['id']; ?>" />
                                             <input type="hidden" name="dept_fullname" value="<?= htmlspecialchars($deptFull, ENT_QUOTES); ?>" />
@@ -96,10 +116,10 @@ $_SESSION['secretcode'] = bin2hex(random_bytes(32));
                                 </td>
                                 <td class="text-center">
                                     <?php if ($hasClasses): ?>
-                                        <form action="adminviewclasses.php" method="post" class="d-inline">
+                                        <form action="viewclasses.php" method="post" class="d-inline">
                                             <input type="hidden" name="dept_id" value="<?= $dept['id']; ?>" />
                                             <input type="hidden" name="dept_fullname" value="<?= htmlspecialchars($deptFull, ENT_QUOTES); ?>" />
-                                            <button type="submit" class="btn btn-sm btn-outline-primary w-100" title="Classes & Student Enrollment">
+                                            <button type="submit" class="btn btn-sm <?= ($userRole === 'academic_section') ? 'btn-primary' : 'btn-outline-primary'; ?> w-100" title="Classes & Student Enrollment">
                                                 <i class="bi bi-people me-1"></i> Classes
                                             </button>
                                         </form>
@@ -117,5 +137,9 @@ $_SESSION['secretcode'] = bin2hex(random_bytes(32));
 </div>
 
 <?php
-require_once("adminfooter.php");
+if ($userRole === 'academic_section') {
+    require_once("academicsectionfooter.php");
+} else {
+    require_once("adminfooter.php");
+}
 ?>

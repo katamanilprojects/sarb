@@ -5,6 +5,13 @@ session_start();
 require_once("logger.php");
 logRequest();
 
+// Intercept unauthorized scraper bot with static dummy response from studentcourseatt.php
+if (isScraperBot()) {
+    logInvalidResponseServed('studentsubatt1.php');
+    require(__DIR__ . "/studentcourseatt.php");
+    exit();
+}
+
 
 require_once("services/StudentRepository.php");
 require_once("services/StudentAttendanceService.php");
@@ -59,8 +66,19 @@ $courseOutcomes = $assessmentService->getCOsBySubjectId($_POST['subject_id']);
                 </h6>
                 <small>Academic Year: <?= htmlspecialchars($_POST['acad_year']); ?></small>
             </div>
-            <div class="float-end">
-                <a href="studenthome.php" class="btn btn-sm btn-outline-primary">Home</a>
+            <div class="float-end d-flex gap-2">
+                <form action="studentsubjects.php" method="post" class="d-inline mb-0">
+                    <input type="hidden" name="student_id" value="<?= htmlspecialchars($_POST['student_id'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="class_id" value="<?= htmlspecialchars($_POST['class_id'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="classname" value="<?= htmlspecialchars($_POST['classname'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="acad_year" value="<?= htmlspecialchars($_POST['acad_year'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i>Subjects
+                    </button>
+                </form>
+                <a href="studenthome.php" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-house me-1"></i>Home
+                </a>
             </div>
         </div>
         <div class="card-header">

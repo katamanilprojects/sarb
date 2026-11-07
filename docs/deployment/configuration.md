@@ -15,24 +15,29 @@ This guide details the technical requirements, unified repository layout, enviro
 
 ## 2. Directory Layout & Unified Application Architecture
 
-The repository consists of two decoupled web portals (`jntuacea/` and `jntuaceastudents/`) sharing a synchronized 22-file Trusted Core (`core/`), a 90-table MariaDB/MySQL database (`database/`), CLI maintenance tools (`tools/`), and automated verification suites (`tests/`):
+The repository consists of two decoupled web portals (`jntuacea/` and `jntuaceastudents/`) sharing a synchronized 29-class Trusted Core (`core/`), a 92-table MariaDB/MySQL database (`database/`), an AI analytics subsystem (`ai_pipeline/`), CLI maintenance tools (`tools/`), and automated verification suites (`tests/`):
 
 ```text
-/Applications/MAMP/htdocs/classattendance.in/
+/Applications/MAMP/htdocs/classattendance.in/ (or C:/xampp/htdocs/classattendance/)
 ├── .env.example              <-- Environment configuration template
 ├── .env.php                  <-- Shared environment configuration file (git-ignored)
 ├── .htaccess                 <-- Root Apache access hardening rules
-├── FACULTY_USER_MANUAL.md    <-- Complete 25-feature Faculty Operations Manual
+├── ai_pipeline/              <-- Background AI analytics & sentiment synthesis worker subsystem
+│   ├── config/               <-- Pipeline settings & database connectors
+│   ├── core/                 <-- LLM client, model routing & prompt builders
+│   ├── database/             <-- Migration SQL (migration_ai_analytics.sql)
+│   ├── tools/                <-- Health check & worker test utilities
+│   └── workers/              <-- analyze_feedback.py worker scripts
 ├── database/
 │   ├── baselines/            <-- Baseline schema verification files
-│   ├── dumps/                <-- Complete 90-table SQL schema dump
+│   ├── dumps/                <-- Complete 92-table SQL schema dump
 │   ├── migrations/           <-- Active & archived replay-safe SQL migrations
 │   └── seeds/                <-- Foundation seed data
 ├── docs/                     <-- Technical, database, workflow & deployment documentation
 ├── jntuacea/                 <-- Staff, Faculty, HOD, Academic Section, Admin & SuperAdmin Portal
 │   ├── index.php
 │   ├── dbcredentials.class.php
-│   ├── core/                 <-- 22 Shared Trusted Core classes (namespace College)
+│   ├── core/                 <-- 29 Shared Trusted Core classes (namespace College)
 │   ├── services/             <-- 21 Domain, PDF, Excel, Attainment, Review & AI services
 │   ├── views/                <-- Modular UI view templates
 │   ├── logs/                 <-- Daily activity and error logs (Apache-denied)
@@ -40,8 +45,8 @@ The repository consists of two decoupled web portals (`jntuacea/` and `jntuaceas
 ├── jntuaceastudents/         <-- Student Self-Service Portal
 │   ├── index.php
 │   ├── dbcredentials.class.php
-│   ├── core/                 <-- Synchronized copy of 22 Shared Trusted Core classes
-│   ├── services/             <-- Student-scoped domain services
+│   ├── core/                 <-- Synchronized copy of 29 Shared Trusted Core classes
+│   ├── services/             <-- 8 Student-scoped domain services
 │   ├── logs/                 <-- Daily activity and error logs (Apache-denied)
 │   └── uploads/
 ├── tests/                    <-- Reproducible workflow, core, attainment, AI & migration tests
@@ -105,10 +110,24 @@ defined('TURNSTILE_SECRET') || define('TURNSTILE_SECRET', '');
      ```
 
 3. **Verify Schema Completeness**:
-   Confirm that all **90 tables** (821 columns across 12 functional domains) are present:
+   Confirm that all **92 tables** (839 columns across 12 functional domains) are present:
    ```sql
    USE u182589698_jntuaceasarb;
    SHOW TABLES;
+   ```
+
+4. **AI Pipeline Configuration (Optional Background Worker)**:
+   The `ai_pipeline/` background analytics subsystem requires Python 3.10+ and MySQL connectivity:
+   ```bash
+   cd ai_pipeline
+   python -m venv venv
+   source venv/bin/activate  # On Windows: .\venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   python tools/health_check.py
+   ```
+   To run sentiment synthesis workers in the background:
+   ```bash
+   python workers/analyze_feedback.py --interval 300
    ```
 
 ---

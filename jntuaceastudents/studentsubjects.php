@@ -103,7 +103,7 @@ if ($isResultsPub) {
                                     </td>
                                 <?php endif; ?>
                             </tr>
-                            <form id="subject_form_<?= htmlspecialchars($subject['id'], ENT_QUOTES, 'UTF-8'); ?>" action="studentcourseatt.php" method="post" style="display: none;">
+                            <form id="subject_form_<?= htmlspecialchars($subject['id'], ENT_QUOTES, 'UTF-8'); ?>" action="studentsubjectatt.php" method="post" style="display: none;">
                                 <input type="hidden" name="subject_id" value="<?= htmlspecialchars($subject['id'], ENT_QUOTES, 'UTF-8'); ?>">
                                 <input type="hidden" name="subcode" value="<?= htmlspecialchars($subject['subcode'], ENT_QUOTES, 'UTF-8'); ?>">
                                 <input type="hidden" name="sub_fullname" value="<?= htmlspecialchars($subject['sub_fullname'], ENT_QUOTES, 'UTF-8'); ?>">

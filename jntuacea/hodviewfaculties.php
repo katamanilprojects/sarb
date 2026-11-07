@@ -7,15 +7,40 @@ require_once("hod.class.php");
 require_once("hodheader.php");
 
 $hodObj = new HOD();
+
+if (!empty($_POST['action']) && $_POST['action'] === 'quick_reset_pwd' && !empty($_POST['faculty_id'])) {
+    $facId = (int)$_POST['faculty_id'];
+    $res = $hodObj->resetFacPwd($facId, (int)$_SESSION['dept_id']);
+    if (!empty($res['status']) && $res['status'] === 1) {
+        $succ = "Password reset successfully! Default password is the faculty member's mobile number.";
+    } else {
+        $error = "Failed to reset password. Please ensure the faculty member belongs to your department and has a valid mobile number.";
+    }
+}
+
 $faculties = $hodObj->getFacultyByDepartment($_SESSION["dept_id"]);
 ?>
 
 <div class="container">
     <div class="card">
-        <div class="card-header">
-            Faculty Details
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-person-badge me-2"></i>Department Faculty Roster</span>
+            <span class="badge bg-primary"><?= count($faculties['data'] ?? []) ?> Members</span>
         </div>
         <div class="card-body">
+
+            <?php if (isset($succ)): ?>
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="bi bi-check-circle me-2"></i><?= htmlspecialchars($succ) ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            <?php endif; ?>
+            <?php if (isset($error)): ?>
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="bi bi-exclamation-triangle me-2"></i><?= htmlspecialchars($error) ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            <?php endif; ?>
 
             <table class="table table-bordered">
                 <thead>
@@ -26,7 +51,7 @@ $faculties = $hodObj->getFacultyByDepartment($_SESSION["dept_id"]);
                         <th scope="col">Designation</th>
                         <th scope="col">Mobile</th>
                         <th scope="col">Status</th>
-                        <th scope="col">Profile Details</th>
+                        <th scope="col">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -45,12 +70,21 @@ $faculties = $hodObj->getFacultyByDepartment($_SESSION["dept_id"]);
                                 <?= $faculty['status'] == 1 ? 'Active' : 'Inactive' ?>
                             </td>
                             <td>
-                                <form action="hodfacultyprofile.php" method="post">
-                                    <input type="hidden" name="faculty_id" value="<?= $faculty['id'] ?>">
-                                    <button type="submit" class="btn btn-sm <?= $faculty['status'] == 1 ? 'btn-outline-primary' : 'btn-outline-secondary' ?>">
-                                        <i class="bi bi-person-gear"></i> Manage Profile
-                                    </button>
-                                </form>
+                                <div class="d-flex gap-1">
+                                    <form action="hodfacultyprofile.php" method="post" class="m-0">
+                                        <input type="hidden" name="faculty_id" value="<?= $faculty['id'] ?>">
+                                        <button type="submit" class="btn btn-sm <?= $faculty['status'] == 1 ? 'btn-outline-primary' : 'btn-outline-secondary' ?>">
+                                            <i class="bi bi-person-gear"></i> Profile
+                                        </button>
+                                    </form>
+                                    <form action="hodviewfaculties.php" method="post" class="m-0" onsubmit="return confirm('Are you sure you want to reset password for <?= htmlspecialchars($faculty['name'], ENT_QUOTES); ?>?\nDefault password will be set to mobile number.');">
+                                        <input type="hidden" name="faculty_id" value="<?= $faculty['id'] ?>">
+                                        <input type="hidden" name="action" value="quick_reset_pwd">
+                                        <button type="submit" class="btn btn-sm btn-outline-warning" title="Reset password to mobile number">
+                                            <i class="bi bi-key"></i> Reset Pwd
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     <?php 
@@ -59,9 +93,6 @@ $faculties = $hodObj->getFacultyByDepartment($_SESSION["dept_id"]);
                     ?>
                 </tbody>
             </table>
-        </div>
-        <div class="card-footer">
-            
         </div>
     </div>
     <?php if (isset($succ)): ?>

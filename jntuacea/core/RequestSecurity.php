@@ -71,7 +71,11 @@ final class RequestSecurity
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
         if (!in_array($page, $public, true)) {
             if (empty($_SESSION['user']) || empty($_SESSION['userid']) || empty($_SESSION['role'])) {
-                self::deny('Please sign in to access this page.', 401);
+                if (str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') || str_contains(basename($_SERVER['SCRIPT_FILENAME'] ?? ''), 'ajax')) {
+                    self::deny('Please sign in to access this page.', 401);
+                }
+                header('Location: ./');
+                exit;
             }
             if ($portal === 'student' && $_SESSION['role'] !== 'student') {
                 self::deny('Student access required.');
@@ -79,10 +83,48 @@ final class RequestSecurity
             if ($portal === 'staff' && $_SESSION['role'] === 'student') {
                 self::deny('Staff access required.');
             }
-            if ($portal === 'staff' && !in_array($page, ['faculty_weekly_timetable.php', 'academicsectionresults.php', 'facciaanalysis2.class.php'], true)) {
-                foreach (['superadmin' => 'superadmin', 'academicsection' => 'academic_section', 'admin' => 'admin', 'hod' => 'hod', 'fac' => 'faculty'] as $prefix => $role) {
-                    if (str_starts_with($page, $prefix) && $_SESSION['role'] !== $role) {
-                        self::deny('Your role cannot use this page.');
+            if ($portal === 'staff') {
+                $userRole = $_SESSION['role'] ?? '';
+                if ($userRole !== 'superadmin') {
+                    $sharedAcademicAdminPages = [
+                        'adminfacst.php',
+                        'adminviewclasses.php',
+                        'adminenrollstudents.php',
+                        'adminviewstudents.php',
+                        'adminunenrollstudents.php',
+                        'adminuploadst.php',
+                        'adminstudentprofiles.php',
+                        'admincustodyledger.php',
+                    ];
+                    $sharedStudentPages = [
+                        'viewclasses.php',
+                        'enrollstudents.php',
+                        'viewstudents.php',
+                        'unenrollstudents.php',
+                        'uploadstudents.php',
+                        'editstudent.php',
+                    ];
+                    $exemptPages = [
+                        'faculty_weekly_timetable.php',
+                        'academicsectionresults.php',
+                        'facciaanalysis2.class.php',
+                        'viewtimetable.php',
+                    ];
+
+                    if (in_array($page, $sharedStudentPages, true)) {
+                        if (!in_array($userRole, ['academic_section', 'admin'], true)) {
+                            self::deny('Your role cannot use this page.');
+                        }
+                    } elseif (!in_array($page, $exemptPages, true)) {
+                        if ($userRole === 'academic_section' && in_array($page, $sharedAcademicAdminPages, true)) {
+                            // Academic Section has authorized access to shared institutional student enrollment and profile pages
+                        } else {
+                            foreach (['superadmin' => 'superadmin', 'academicsection' => 'academic_section', 'admin' => 'admin', 'hod' => 'hod', 'fac' => 'faculty'] as $prefix => $requiredRole) {
+                                if (str_starts_with($page, $prefix) && $userRole !== $requiredRole) {
+                                    self::deny('Your role cannot use this page.');
+                                }
+                            }
+                        }
                     }
                 }
             }

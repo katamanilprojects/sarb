@@ -3,14 +3,16 @@ require_once __DIR__ . '/bootstrap.php';
 
 if (session_status() !== PHP_SESSION_ACTIVE) { session_start(); }
 require_once __DIR__ . '/services/FeatureManager.php';
-$page_title = "View Attendance";
+$page_title = "Academic Records";
 require_once("hodheader.php");
 
 $showAtt = \FeatureManager::isHodVisible('MOD_ATTENDANCE');
 $showRequests = \FeatureManager::isHodVisible('MOD_ATT_REQUESTS');
 $showObe = \FeatureManager::isHodVisible('MOD_OBE_ANALYSIS');
 $showFeedback = \FeatureManager::isHodVisible('MOD_FEEDBACK');
-$showAnalysisReports = $showObe || $showFeedback;
+$showResults = \FeatureManager::canRoleAccess('MOD_RESULTS_PUBLISH', 'hod');
+$showProfiles = \FeatureManager::canRoleAccess('MOD_STUDENT_PROFILE', 'hod');
+$showAnalysisReports = $showObe || $showFeedback || $showResults || $showProfiles;
 ?>
 <div class="container">
 	<br />
@@ -101,10 +103,29 @@ $showAnalysisReports = $showObe || $showFeedback;
 						</a>
 					</div>
                     <?php endif; ?>
+					<div class="gap-2 mb-2">
+						<a href="hodshowcls_cia.php" class="btn btn-outline-info">
+							<i class="bi bi-file-earmark-spreadsheet me-1"></i> Class-wise CIA Marks Ledger
+						</a>
+					</div>
                     <?php if ($showFeedback): ?>
-					<div class="gap-2">
+					<div class="gap-2 mb-2">
 						<a href="hodviewfeedback.php" class="btn btn-info">
 							<i class="bi bi-chat-dots me-1"></i> Course-wise Feedback
+						</a>
+					</div>
+                    <?php endif; ?>
+                    <?php if ($showResults): ?>
+					<div class="gap-2 mb-2">
+						<a href="hodresults.php" class="btn btn-outline-primary">
+							<i class="bi bi-award me-1"></i> Department Examination Results
+						</a>
+					</div>
+                    <?php endif; ?>
+                    <?php if ($showProfiles): ?>
+					<div class="gap-2">
+						<a href="adminstudentprofiles.php" class="btn btn-outline-secondary">
+							<i class="bi bi-person-badge me-1"></i> Student Profiles & Dossiers
 						</a>
 					</div>
                     <?php endif; ?>

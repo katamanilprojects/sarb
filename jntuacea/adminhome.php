@@ -7,6 +7,7 @@ if (session_status() === PHP_SESSION_NONE) {
 $page_title = "Home";
 require_once("adminheader.php");
 require_once("admin.class.php");
+require_once __DIR__ . "/services/FeatureManager.php";
 
 $adminObj = new Admin();
 $depts = $adminObj->getAllDepartments();
@@ -70,9 +71,10 @@ $deptCount = count($depts['data'] ?? []);
                         <h5 class="fw-bold mb-1">Academic Records</h5>
                         <p class="text-muted small mb-0">Faculty-wise, class-wise, & college aggregates.</p>
                     </div>
-                    <div class="mt-3 d-flex gap-1">
+                    <div class="mt-3 d-flex flex-wrap gap-1">
                         <a href="adminshowfacattendance.php" class="btn btn-outline-success btn-sm flex-fill">By Faculty</a>
                         <a href="adminshowallclsattendance.php" class="btn btn-outline-success btn-sm flex-fill">Overall %</a>
+                        <a href="viewtimetable.php" class="btn btn-outline-primary btn-sm flex-fill" title="Campus Timetable & Room Usage"><i class="bi bi-clock-history me-1"></i>Timetable</a>
                     </div>
                 </div>
             </div>
@@ -139,12 +141,16 @@ $deptCount = count($depts['data'] ?? []);
                         <a href="academicsectionresults.php" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-file-earmark-spreadsheet me-1"></i> Exam Results
                         </a>
+                        <?php if (\FeatureManager::isModuleEnabled('MOD_STUDENT_PROFILE')): ?>
                         <a href="adminstudentprofiles.php" class="btn btn-outline-success btn-sm">
                             <i class="bi bi-person-badge me-1"></i> Student Profiles & Vault
                         </a>
+                        <?php endif; ?>
+                        <?php if (\FeatureManager::isModuleEnabled('MOD_CERTIFICATES')): ?>
                         <a href="admincustodyledger.php" class="btn btn-outline-warning text-dark btn-sm">
                             <i class="bi bi-journal-bookmark me-1"></i> Custodial & Certificates Ledger
                         </a>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>

@@ -64,6 +64,37 @@ class FeatureManager extends \DBCredentials
             $result->free();
         }
 
+        // Auto-seed missing core module definitions if absent from system_feature_modules
+        $seedNeeded = false;
+        $coreDefaults = [
+            'MOD_STUDENT_PROFILE' => ['Student Profiles & Digital Dossier', 'STUDENT_PORTAL', 'Institutional student profiles, personal dossier, and digital document vault', 0, 'HIDDEN', 'VISIBLE', 'READONLY', 42],
+            'MOD_CERTIFICATES' => ['Institutional Certificates & Custody', 'GENERAL', 'Original certificate custody ledger, issuance workflow, and verification', 0, 'HIDDEN', 'VISIBLE', 'HIDDEN', 43],
+            'MOD_RESULTS_PUBLISH' => ['Department & Semester Results', 'EXAM', 'Published semester results, pass percentages, student grade cards, and backlog rosters', 0, 'HIDDEN', 'VISIBLE', 'READONLY', 44],
+        ];
+
+        foreach ($coreDefaults as $modKey => $def) {
+            if (!isset($this->modulesCache[$modKey])) {
+                $seedStmt = $this->conn->prepare("INSERT INTO system_feature_modules (module_key, module_name, category, description, is_enabled_globally, faculty_visibility, student_visibility, hod_visibility, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE module_key = VALUES(module_key)");
+                if ($seedStmt) {
+                    $seedStmt->bind_param("ssssisssi", $modKey, $def[0], $def[1], $def[2], $def[3], $def[4], $def[5], $def[6], $def[7]);
+                    $seedStmt->execute();
+                    $seedStmt->close();
+                    $seedNeeded = true;
+                }
+            }
+        }
+
+        if ($seedNeeded) {
+            if ($result = $this->conn->query($query)) {
+                $this->modulesCache = [];
+                while ($row = $result->fetch_assoc()) {
+                    if($row['module_key']==='MOD_ATTENDANCE_DELETE_REQUESTS'){continue;}
+                    $this->modulesCache[$row['module_key']] = $row;
+                }
+                $result->free();
+            }
+        }
+
         $this->isLoaded = true;
     }
 

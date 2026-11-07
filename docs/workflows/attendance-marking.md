@@ -122,3 +122,37 @@ The shared core classes `\College\AttendanceService` (`core/AttendanceService.ph
 - **`download_bluebook.php`**: Generates the official university e-Bluebook via `EBluebookPDFService`:
   - **Section 2B ('DIARY OF LECTURER CLASSES')**: Rendered in a clean 4-column format (`S.No`, `Date`, `Time`, `Topics Covered`).
   - **Section 3 ('ATTENDANCE REGISTER')**: Comprehensive student-by-student period roll with monthly aggregates and overall attendance percentages.
+
+---
+
+## 5. Student Portal Attendance Views & Security Hardening
+
+Students track attendance and standing through dedicated, verified endpoints in `jntuaceastudents`:
+
+### 5.1 Multi-View Subject Attendance Architecture
+1. **Subject Attendance & Continuous Assessment Hub (`studentsubjectatt.php` & `studentsubatt1.php`)**:
+   - Requires valid session and verified student ownership: `verifyStudentOwnership($student_id, $_SESSION['user'])`.
+   - Validates class enrollment and active status: `verifyClassEnrollment($student_id, $class_id)`.
+   - Validates subject enrollment: `verifySubjectEnrollment($student_id, $subject_id)`.
+   - Renders interactive period roll, monthly attendance breakdowns, faculty diary topics, and continuous internal assessment (CIA) marks.
+2. **Scraper Honeypot & DoS Protection (`studentcourseatt.php`)**:
+   - Both `studentsubjectatt.php` and `studentsubatt1.php` inspect client headers via `isScraperBot()`.
+   - If an automated scraper or crawler bot is detected, execution is silently diverted to `studentcourseatt.php`.
+   - `studentcourseatt.php` generates a deterministic mock attendance ledger based on `crc32(subcode + student_id)`:
+     - Zero database queries (`0.0 ms` DB overhead).
+     - Renders realistic period times and syllabus topics.
+     - Protects the live MariaDB server from connection exhaustion and data scraping attacks.
+3. **Consolidated Subject Overview (`studentsubatt.php`)**:
+   - Displays all registered subjects for the current semester with attended/conducted counts, attendance percentages, and examination grade badges when `MOD_RESULTS_PUBLISH` is enabled.
+
+### 5.2 Predictive Risk Gauge & Snapshot Engine (`MOD_STUDENT_ATTENDANCE_RISK`)
+- **Formula & Safe Margin Modeling**:
+  - **Safe Margin** (classes a student can miss while remaining at or above 75%):
+    $$\text{Safe Margin} = \max\left(0, \left\lfloor \frac{P - 0.75 \times T}{0.75} \right\rfloor\right)$$
+  - **Recovery Periods Needed** (consecutive classes a student must attend to reach 75%):
+    $$\text{Recovery Classes} = \max\left(0, \left\lceil \frac{0.75 \times T - P}{0.25} \right\rceil\right)$$
+- **Snapshot Persistence (`student_risk_snapshots`)**:
+  - Evaluated periodically by background batch tasks and stored in `student_risk_snapshots`.
+  - Schema: `(student_id, class_id, cutoff_date, policy_hash, category, metrics_json, created_at)`.
+  - Categories: `ELIGIBLE`, `CONDONABLE`, `DETAINED`, `POLICY_REVIEW`, `DATA_UNAVAILABLE`.
+  - Eliminates repetitive query overhead on the main student dashboard while ensuring compliance auditability.

@@ -126,3 +126,30 @@ Located in [`feedbackservice.class.php`](../../jntuacea/feedbackservice.class.ph
   - **Raw - Student CO Matrix**: Anonymized row-by-row audit data of student CO responses.
   - **Raw - CES**: Anonymized survey responses across all 16 questions and qualitative fields.
   - **Raw - Faculty Appraisal**: Strictly anonymized student evaluations across 19 criteria.
+
+---
+
+## 7. AI-Assisted Qualitative Synthesis & Governance (`ai_pipeline` & `ai_analysis_reports`)
+
+To synthesize thousands of open-ended qualitative student comments across CES Part-C and Faculty Appraisals without compromising student confidentiality:
+
+### 7.1 Background Worker Pipeline (`ai_pipeline/workers/analyze_feedback.py`)
+1. **Anonymized Data Extraction**:
+   - Queries comments from `student_ces_feedback` and `student_faculty_feedback` stripped of all identifying student metadata (`student_id`, `regno`, IP addresses).
+   - Generates a deterministic SHA-256 `source_hash` representing the underlying feedback corpus.
+2. **Pedagogical Theme Clustering & Sentiment Analysis**:
+   - Invokes local LLM models (e.g., `gemini-1.5-pro` or open local models) via `ai_pipeline/core/llm_client.py`.
+   - Clusters feedback into pedagogical strengths, actionable improvement opportunities, curriculum clarity, and learning pace.
+3. **Structured Storage in `ai_analysis_reports`**:
+   - Inserts report JSON into `ai_analysis_reports`:
+     - `report_type`: `'FEEDBACK_SYNTHESIS'`.
+     - `entity_type`: `'SUBJECT'`, `'FACULTY'`, or `'DEPARTMENT'`.
+     - `entity_id`: Target database ID.
+     - `analysis_json`: Structured insights, thematic clusters, sentiment scores, and recommended interventions.
+     - `status`: Stored initially as `'DRAFT'`.
+
+### 7.2 Human-in-the-Loop Review & Approval Workflow
+- AI reports are never published directly to faculty without administrative oversight.
+- HODs and Principals review drafts in the AI Governance Console:
+  - Can review, redact, approve (`status = 'APPROVED'`), or archive (`status = 'ARCHIVED'`) generated analyses.
+  - Approved summaries are linked to departmental BoS and IQAC academic audit files.

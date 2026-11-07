@@ -1,0 +1,15 @@
+{
+  "environment": "staging",
+  "runtime_dir": "C:\\classattendance-ai\\staging",
+  "php_executable": "C:\\xampp\\php\\php.exe",
+  "agent_executable": "C:\\Users\\YOUR_USER\\AppData\\Roaming\\npm\\agy.cmd",
+  "test_database": "cea_standardisation_test_ai_pipeline",
+  "task_timeout_seconds": 3000,
+  "verification_timeout_seconds": 600,
+  "max_attempts": 3,
+  "allow_production_batch": false,
+  "ollama_endpoint": "http://127.0.0.1:11434",
+  "ollama_model": "gemma2:2b",
+  "batch_timeout_seconds": 3600,
+  "process_ai_jobs": false
+}

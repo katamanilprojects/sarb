@@ -316,20 +316,27 @@ class HOD extends User
 
     // In hod.class.php
 
-    public function resetFacPwd($faculty_id)
+    public function resetFacPwd($faculty_id, $dept_id = null)
     {
         $myname = "HOD - resetFacPwd - ";
         $res = ['status' => 0];
+        $dept_id = $dept_id !== null ? (int)$dept_id : (!empty($_SESSION['dept_id']) ? (int)$_SESSION['dept_id'] : null);
 
         try {
             if (!empty($this->conn)) {
-                // Step 1: Fetch faculty mobile number
-                if ($fetch_stmt = $this->conn->prepare(
-                    "SELECT u.mobile FROM users u 
-                     JOIN faculties f ON u.username = f.username 
-                     WHERE f.id = ?"
-                )) {
-                    $fetch_stmt->bind_param("i", $faculty_id);
+                // Step 1: Fetch faculty mobile number scoped to HOD's department
+                $fetchSql = "SELECT u.mobile FROM users u 
+                             JOIN faculties f ON u.username = f.username 
+                             WHERE f.id = ?";
+                if ($dept_id !== null) {
+                    $fetchSql .= " AND f.dept_id = ?";
+                }
+                if ($fetch_stmt = $this->conn->prepare($fetchSql)) {
+                    if ($dept_id !== null) {
+                        $fetch_stmt->bind_param("ii", $faculty_id, $dept_id);
+                    } else {
+                        $fetch_stmt->bind_param("i", $faculty_id);
+                    }
                     $fetch_stmt->execute();
                     $fetch_stmt->bind_result($mobile);
                     if ($fetch_stmt->fetch()) {
@@ -338,15 +345,24 @@ class HOD extends User
                         // Step 2: Hash password in PHP using bcrypt
                         $new_password = password_hash($mobile, PASSWORD_BCRYPT);
                         
-                        // Step 3: Update with bcrypt hash
-                        if ($stmt = $this->conn->prepare(
-                            "UPDATE users u 
-                             JOIN faculties f ON u.username = f.username
-                             SET u.password = ? WHERE f.id = ?"
-                        )) {
-                            $stmt->bind_param("si", $new_password, $faculty_id);
+                        // Step 3: Update with bcrypt hash scoped to department
+                        $updateSql = "UPDATE users u 
+                                     JOIN faculties f ON u.username = f.username
+                                     SET u.password = ? WHERE f.id = ?";
+                        if ($dept_id !== null) {
+                            $updateSql .= " AND f.dept_id = ?";
+                        }
+                        if ($stmt = $this->conn->prepare($updateSql)) {
+                            if ($dept_id !== null) {
+                                $stmt->bind_param("sii", $new_password, $faculty_id, $dept_id);
+                            } else {
+                                $stmt->bind_param("si", $new_password, $faculty_id);
+                            }
                             if ($stmt->execute()) {
                                 $res['status'] = 1;
+                                if (method_exists($this, 'dbActivityLog')) {
+                                    $this->dbActivityLog($_SESSION['userid'] ?? 0, "Reset Faculty Password", "HOD reset password for faculty ID: " . $faculty_id, "hod", "FACULTY", (string)$faculty_id);
+                                }
                             } else {
                                 $this->logs->errLog($myname . "Statement execution failed: " . $this->conn->error);
                             }
@@ -354,7 +370,7 @@ class HOD extends User
                         }
                     } else {
                         $fetch_stmt->close();
-                        $this->logs->errLog($myname . "Faculty not found: " . $faculty_id);
+                        $this->logs->errLog($myname . "Faculty not found or not in department: " . $faculty_id);
                     }
                 } else {
                     $this->logs->errLog($myname . "Preparation failed: " . $this->conn->error);
@@ -1220,30 +1236,48 @@ class HOD extends User
 
         try {
             $stmt = $this->conn->prepare("
-            SELECT aur.id, f.username AS faculty_name, s.sub_fullname AS subject, aur.date, aur.hour, aur.reason, aur.status, aur.request_date, aur.approval_date
-            FROM attendance_delete_requests aur
-            JOIN faculties f ON aur.faculty_id = f.id
-            JOIN subjects s ON aur.subject_id = s.id
-            JOIN departments d ON f.dept_id = d.id
-            WHERE d.id = ?
-            ORDER BY aur.request_date DESC
-        ");
+                SELECT 
+                    aur.id, 
+                    aur.faculty_id,
+                    f.username AS faculty_username, 
+                    COALESCE(u.name, f.username) AS faculty_name,
+                    COALESCE(f.designation, '') AS faculty_designation,
+                    COALESCE(d_fac.dept_shortname, '') AS faculty_dept,
+                    COALESCE(d_fac.dept_fullname, '') AS faculty_dept_fullname,
+                    (f.dept_id != sp.dept_id) AS is_cross_department,
+                    s.id AS subject_id,
+                    COALESCE(s.subcode, '') AS subcode, 
+                    s.sub_fullname AS subject,
+                    COALESCE(s.sub_shortname, '') AS sub_shortname,
+                    c.id AS class_id,
+                    COALESCE(c.classname, '') AS classname, 
+                    COALESCE(c.yearsem, '') AS yearsem, 
+                    COALESCE(c.section, '') AS section,
+                    COALESCE(sp.spec_shortname, '') AS spec_shortname,
+                    COALESCE(sp.spec_fullname, '') AS spec_fullname,
+                    aur.date, 
+                    aur.hour, 
+                    COALESCE(ct.hour_desc, '') AS hour_desc,
+                    aur.reason, 
+                    aur.status, 
+                    aur.request_date, 
+                    aur.approval_date
+                FROM attendance_delete_requests aur
+                JOIN faculties f ON aur.faculty_id = f.id
+                LEFT JOIN users u ON u.username = f.username
+                LEFT JOIN departments d_fac ON d_fac.id = f.dept_id
+                JOIN subjects s ON aur.subject_id = s.id
+                JOIN classes c ON c.id = s.class_id
+                JOIN specialization sp ON sp.id = c.spec_id
+                LEFT JOIN class_timings ct ON ct.id = aur.hour
+                WHERE sp.dept_id = ?
+                ORDER BY aur.request_date DESC
+            ");
             $stmt->bind_param("i", $dept_id);
+
             if ($stmt->execute()) {
-                $stmt->bind_result($id, $faculty_name, $subject, $date, $hour, $reason, $status, $request_date, $approval_date);
-                while ($stmt->fetch()) {
-                    $res['data'][] = [
-                        'id' => $id,
-                        'faculty_name' => $faculty_name,
-                        'subject' => $subject,
-                        'date' => $date,
-                        'hour' => $hour,
-                        'reason' => $reason,
-                        'status' => $status,
-                        'approval_date' => $approval_date,
-                        'request_date' => $request_date
-                    ];
-                }
+                $result = $stmt->get_result();
+                $res['data'] = $result->fetch_all(MYSQLI_ASSOC);
                 $res['status'] = 1;
             }
             $stmt->close();

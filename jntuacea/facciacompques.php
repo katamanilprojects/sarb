@@ -23,7 +23,7 @@ $component_id = intval($_GET['component_id']);
 $component_type = htmlspecialchars($_GET['component_type']);
 
 $cos = $cia->getCOsBySubjectId($sub_id);
-if (empty($cos['data'])) {
+if (empty($cos['data']) || !empty($cos['is_inherited'])) {
     echo "<script>alert('Please Add Course Outcomes to Proceed Further.');window.location.href = 'faceditoptions.php';</script>";
     exit;
 }

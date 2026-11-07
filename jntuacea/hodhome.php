@@ -13,8 +13,9 @@ require_once __DIR__ . "/services/FeatureManager.php";
     }
 </style>
 <div class="container"><?php if(\Services\FeatureManager::canAction('MOD_SEE_MARKS','view')): ?><a href="attainmentimport.php" class="btn btn-outline-primary my-2">Import attainment evidence</a><?php endif ?><?php if(\Services\FeatureManager::canAction('MOD_AI_ASSISTANCE','view')): ?><a href="aiassistance.php" class="btn btn-outline-secondary my-2 ms-2">Review AI drafts</a><?php endif ?>
-    <!--<p class="mt-3"><a class="btn btn-outline-primary" href="reviewqueue.php">Course review and action tracking</a></p>
-    <br />-->
+    <?php if (\FeatureManager::canRoleAccess('MOD_CQI_ACTION_TRACKING', 'hod')): ?>
+        <p class="mt-3"><a class="btn btn-outline-primary" href="reviewqueue.php"><i class="bi bi-clipboard-check me-1"></i> Course review and action tracking</a></p>
+    <?php endif; ?>
     <div class="card">
 		<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
 			<span><i class="bi bi-info-circle me-2"></i> HOD Instructions</span>
@@ -24,8 +25,16 @@ require_once __DIR__ . "/services/FeatureManager.php";
 					<i class="bi bi-journal-bookmark me-1"></i> Course Master Files
 				</a>
 				<?php endif; ?>
-				<a href="faculty_weekly_timetable.php" class="btn btn-outline-primary btn-sm">
+				<?php if (\FeatureManager::canRoleAccess('MOD_STUDENT_PROFILE', 'hod')): ?>
+				<a href="adminstudentprofiles.php" class="btn btn-outline-secondary btn-sm me-1">
+					<i class="bi bi-person-badge me-1"></i> Student Profiles
+				</a>
+				<?php endif; ?>
+				<a href="faculty_weekly_timetable.php" class="btn btn-outline-primary btn-sm me-1">
 					<i class="bi bi-calendar-week me-1"></i> Faculty Weekly Timetable
+				</a>
+				<a href="viewtimetable.php" class="btn btn-outline-success btn-sm">
+					<i class="bi bi-clock-history me-1"></i> Campus Timetable
 				</a>
 			</div>
 		</div>

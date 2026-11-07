@@ -6,8 +6,9 @@ $page_title = "Home";
 require_once("facheader.php");
 ?>
 <div class="container">
-	<!--<p class="mt-3"><a class="btn btn-outline-primary" href="reviewqueue.php">Course review and action tracking</a></p>
-	<br />-->
+    <?php if (\FeatureManager::canRoleAccess('MOD_CQI_ACTION_TRACKING', 'faculty')): ?>
+        <p class="mt-3"><a class="btn btn-outline-primary" href="reviewqueue.php"><i class="bi bi-clipboard-check me-1"></i> Course review and action tracking</a></p>
+    <?php endif; ?>
     <?php if (!empty($_SESSION['err'])): ?>
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
             <i class="bi bi-exclamation-triangle-fill me-2"></i><?= htmlspecialchars($_SESSION['err']); ?>

@@ -1,0 +1,248 @@
+{
+  "project": "classattendance.in - AI, Machine Learning & Analytics Layer",
+  "version": "2.0.0",
+  "scope": "ai_pipeline only; staging development, separate production release",
+  "state_location": "runtime_dir/ai_tasks.state.json",
+  "tasks": [
+    {
+      "id": "TASK-01",
+      "title": "Inspect core interfaces and apply isolated pipeline schema",
+      "description": "Verify the canonical attendance and AI job interfaces and schema. Apply database/migration_ai_analytics.sql only to the assigned pre-provisioned disposable database. Document discovered engine/version and incompatible legacy tables in ai_pipeline/database/SCHEMA_NOTES.md. Never change production schema, provider rows, feature flags or consent.",
+      "depends_on": [],
+      "status": "PENDING",
+      "checks": [
+        [
+          "{php}",
+          "ai_pipeline/tests/verify_pipeline.php",
+          "--check-schema",
+          "--database={test_database}"
+        ]
+      ],
+      "required_outputs": [
+        "ai_pipeline/database/migration_ai_analytics.sql",
+        "ai_pipeline/database/SCHEMA_NOTES.md"
+      ],
+      "acceptance_criteria": [
+        "All required core columns and v2 analytics columns/unique keys verified in the isolated database.",
+        "Migration applied twice without changing existing provider/module/consent settings; record the evidence."
+      ],
+      "attempts": 0,
+      "last_error": null,
+      "completed_at": null
+    },
+    {
+      "id": "TASK-02",
+      "title": "Validate Windows environment and configured local model",
+      "description": "Verify Python 3.10+, explicit PHP path, isolated DB connection and exact configured Ollama model. Use standard-library Python; do not install unused ML packages. Document Windows account, service startup and actual CLI invocation smoke test in ai_pipeline/WINDOWS_VALIDATION.md.",
+      "depends_on": [
+        "TASK-01"
+      ],
+      "status": "PENDING",
+      "checks": [
+        [
+          "{python}",
+          "ai_pipeline/worker/test_environment.py"
+        ]
+      ],
+      "required_outputs": [
+        "ai_pipeline/worker/test_environment.py",
+        "ai_pipeline/WINDOWS_VALIDATION.md"
+      ],
+      "acceptance_criteria": [
+        "Missing database, Ollama or configured model returns nonzero.",
+        "Windows scheduled-task account can run the configured CLI headlessly; document actual installed versions."
+      ],
+      "attempts": 0,
+      "last_error": null,
+      "completed_at": null
+    },
+    {
+      "id": "TASK-03",
+      "title": "Validate policy-aware attendance snapshots",
+      "description": "Use worker/attendance_batch.php through the Python compatibility entry point. Create an isolated fixture test tests/test_attendance_staging.php for joins, class scope, late joining, enrollment, permissions, missing diary evidence and configurable thresholds. No learned model or probability claims. Test duplicate-safe snapshots and rollback on failure.",
+      "depends_on": [
+        "TASK-02"
+      ],
+      "status": "PENDING",
+      "checks": [
+        [
+          "{python}",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "ai_pipeline/tests",
+          "-p",
+          "test_*.py"
+        ],
+        [
+          "{php}",
+          "ai_pipeline/tests/test_attendance_staging.php",
+          "--database={test_database}"
+        ]
+      ],
+      "required_outputs": [
+        "ai_pipeline/worker/attendance_batch.php",
+        "ai_pipeline/tests/test_attendance_staging.php"
+      ],
+      "acceptance_criteria": [
+        "Snapshots match College\\AttendanceService, including DATA_UNAVAILABLE and POLICY_REVIEW.",
+        "Dry runs do not write; repeat writes are idempotent and transaction failures roll back."
+      ],
+      "attempts": 0,
+      "last_error": null,
+      "completed_at": null
+    },
+    {
+      "id": "TASK-04",
+      "title": "Validate existing AI worker without live jobs",
+      "description": "Create tests/test_ai_jobs_staging.php using isolated fixtures and fake provider transport. Reuse existing AIJobService and AIProvider. Verify consent, module controls, duplicate input, job lease/retry, output validation and scoped approval. Do not use a production worker invocation as a test.",
+      "depends_on": [
+        "TASK-03"
+      ],
+      "status": "PENDING",
+      "checks": [
+        [
+          "{php}",
+          "ai_pipeline/tests/test_ai_jobs_staging.php",
+          "--database={test_database}"
+        ]
+      ],
+      "required_outputs": [
+        "ai_pipeline/tests/test_ai_jobs_staging.php"
+      ],
+      "acceptance_criteria": [
+        "Consent revocation, disabled module/provider and unauthorized review prevent side effects.",
+        "Mocked output reaches DRAFT once; retries and lease recovery are covered without external AI calls."
+      ],
+      "attempts": 0,
+      "last_error": null,
+      "completed_at": null
+    },
+    {
+      "id": "TASK-05",
+      "title": "Implement optional feedback analysis against verified evidence",
+      "description": "First inspect actual feedback tables/columns and whether free-text comments exist. If absent or no explicit consent/privacy contract exists, report BLOCKED with the needed prerequisite. Otherwise create worker/feedback_analyzer.py and isolated tests/test_feedback_staging.php. Use de-identified bounded evidence, validated JSON, source hashes, timeouts and DRAFT reports; no direct faculty ranking or publication.",
+      "depends_on": [
+        "TASK-04"
+      ],
+      "status": "PENDING",
+      "checks": [
+        [
+          "{php}",
+          "ai_pipeline/tests/test_feedback_staging.php",
+          "--database={test_database}"
+        ]
+      ],
+      "required_outputs": [
+        "ai_pipeline/worker/feedback_analyzer.py",
+        "ai_pipeline/tests/test_feedback_staging.php"
+      ],
+      "acceptance_criteria": [
+        "Verified source/consent contract, de-identification and prompt-injection handling tested.",
+        "Malformed output/failures do not publish reports; duplicate evidence is idempotent."
+      ],
+      "attempts": 0,
+      "last_error": null,
+      "completed_at": null
+    },
+    {
+      "id": "TASK-06",
+      "title": "Prepare authorized CQI draft requests using existing service",
+      "description": "Create an ai_pipeline-only adapter and tests/test_cqi_staging.php using existing evidence snapshots and AIJobService.queueSubject in the authorized user context. Use ATTAINMENT_ANALYSIS or ATR_PROPOSAL; do not insert invented CO_CQI_ACTION jobs, fabricate curriculum columns, bypass consent or automatically approve CQI actions.",
+      "depends_on": [
+        "TASK-05"
+      ],
+      "status": "PENDING",
+      "checks": [
+        [
+          "{php}",
+          "ai_pipeline/tests/test_cqi_staging.php",
+          "--database={test_database}"
+        ]
+      ],
+      "required_outputs": [
+        "ai_pipeline/api/cqi_service.php",
+        "ai_pipeline/tests/test_cqi_staging.php"
+      ],
+      "acceptance_criteria": [
+        "Only an authorized, opted-in owner can queue reviewed evidence; no cross-owner impersonation.",
+        "Existing input/provider hashes deduplicate jobs and output remains subject to human review."
+      ],
+      "attempts": 0,
+      "last_error": null,
+      "completed_at": null
+    },
+    {
+      "id": "TASK-07",
+      "title": "Validate scoped snapshot helper and document portal integration",
+      "description": "Complete api/risk_service.php tests in tests/test_risk_staging.php for student/faculty/HOD scope, changed policy, old class, stale cache and unavailable schema. Add INTEGRATION.md with include examples for authorized portal callers. Do not edit portal files outside ai_pipeline.",
+      "depends_on": [
+        "TASK-06"
+      ],
+      "status": "PENDING",
+      "checks": [
+        [
+          "{php}",
+          "ai_pipeline/tests/test_risk_staging.php",
+          "--database={test_database}"
+        ]
+      ],
+      "required_outputs": [
+        "ai_pipeline/api/risk_service.php",
+        "ai_pipeline/tests/test_risk_staging.php",
+        "ai_pipeline/INTEGRATION.md"
+      ],
+      "acceptance_criteria": [
+        "Unauthorized access is rejected; stale/mismatched policy/class snapshots are not displayed.",
+        "Badges retain provisional categories and dynamic targets; integration changes outside ai_pipeline remain a separate release."
+      ],
+      "attempts": 0,
+      "last_error": null,
+      "completed_at": null
+    },
+    {
+      "id": "TASK-08",
+      "title": "Audit staging batch, scheduling and recovery",
+      "description": "Create tests/test_end_to_end_staging.php for isolated pipeline behavior. Verify the Windows wrappers return failures, single-run locking, interrupted-run recovery, bounded execution, external runtime privacy, migration backup/rollback instructions and nightly batch opt-in. Record real Windows tests in WINDOWS_VALIDATION.md. Do not call syntax checks a complete end-to-end audit.",
+      "depends_on": [
+        "TASK-07"
+      ],
+      "status": "PENDING",
+      "checks": [
+        [
+          "{python}",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "ai_pipeline/tests",
+          "-p",
+          "test_*.py"
+        ],
+        [
+          "{php}",
+          "ai_pipeline/tests/verify_pipeline.php",
+          "--full-audit",
+          "--database={test_database}"
+        ],
+        [
+          "{php}",
+          "ai_pipeline/tests/test_end_to_end_staging.php",
+          "--database={test_database}"
+        ]
+      ],
+      "required_outputs": [
+        "ai_pipeline/tests/test_end_to_end_staging.php",
+        "ai_pipeline/WINDOWS_VALIDATION.md"
+      ],
+      "acceptance_criteria": [
+        "End-to-end staging tests and a real Windows scheduled invocation pass; document timestamps/evidence.",
+        "Recovery, backups, deployment and rollback are documented without enabling production processing."
+      ],
+      "attempts": 0,
+      "last_error": null,
+      "completed_at": null
+    }
+  ]
+}

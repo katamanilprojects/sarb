@@ -3,15 +3,11 @@ require_once __DIR__ . '/bootstrap.php';
 
 if (session_status() !== PHP_SESSION_ACTIVE) { session_start(); }
 
-$page_title = "Reset Faculty Pwd";
-require_once("academicsectionheader.php");
-require_once("academicsection.class.php");
-
-$obj = new AcademicSection();
-$faculty_details = [];
-$error = "";
-$success = "";
-$step = 1; // 1: Enter username, 2: Show details & reset
+// Academic Section no longer has permission to reset faculty passwords.
+// Faculty password resets are restricted to HOD (within department) and Admin (across departments).
+$_SESSION['err'] = "Access Denied: Academic Section does not have permission to reset faculty passwords. Contact Principal or Department HOD.";
+header('Location: academicsectionhome.php');
+exit();
 
 if (!empty($_POST)) {
     if (!empty($_POST['secretcode']) && !empty($_SESSION['secretcode']) && $_POST['secretcode'] == $_SESSION['secretcode']) {

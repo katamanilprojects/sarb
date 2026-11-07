@@ -160,7 +160,13 @@ $_SESSION['secretcode'] = bin2hex(random_bytes(32));
                 if (!empty($_POST['start_date'])) echo '<input type="hidden" name="start_date" value="' . $_POST['start_date'] . '">';
                 if (!empty($_POST['end_date'])) echo '<input type="hidden" name="end_date" value="' . $_POST['end_date'] . '">';
                 echo '<button type="submit" class="btn btn-info">Export to Excel</button>';
-                echo '</form>';            
+                echo '</form>';
+                if (!empty($selected_cls_id) && \FeatureManager::isModuleEnabled('MOD_ATTENDANCE_CONDONATION_GAZETTE')) {
+                    $dateParams = '';
+                    if (!empty($_POST['start_date'])) $dateParams .= '&start_date=' . urlencode($_POST['start_date']);
+                    if (!empty($_POST['end_date'])) $dateParams .= '&end_date=' . urlencode($_POST['end_date']);
+                    echo ' <a href="download_attendance_gazette.php?cls_id=' . (int)$selected_cls_id . $dateParams . '" target="_blank" class="btn btn-warning dontprint ms-1"><i class="bi bi-file-earmark-ruled me-1"></i> Condonation & Detention Gazette</a>';
+                }
             }
             ?>
         </div>

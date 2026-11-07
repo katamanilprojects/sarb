@@ -162,7 +162,7 @@ classDiagram
         +verifyCertificateByToken(reqId, token) array
     }
 
-    class CollegeCore["College\* Shared Trusted Core (22 Classes)"] {
+    class CollegeCore["College\* Shared Trusted Core (29 Classes)"] {
         +Connection::get() mysqli
         +DateRange::validate(start, end) void
         +RequestSecurity::guardResources(conn) void
@@ -171,11 +171,18 @@ classDiagram
         +AttendanceService::classSummary / studentSummary(...) array
         +AttendanceCorrection::updateStudentStatuses / reviewDeleteRequest(...) void
         +AssessmentPolicy::requireRegulationSettings / recordVersion(...) array
+        +VerifiedRegulations::definition(regulation) array
+        +CiaCalculator::policy / evaluate(...) array
+        +CiaPolicySettings::read / save(...) void
+        +CiaService::forClass / forSubject(...) array
+        +PgCiaService::components / label(...) array
         +MarksNormalizer::scaleMarks / selectChoiceQuestions(...) array
         +AttainmentCalculator::calculateExternalAttainment(...) array
         +ResultsPolicy::forSubject(...) array
         +ResultRow::normalize(...) array
         +ResultsCsv::validate(...) array
+        +ResultVersions::canonical / difference(...) array
+        +ResultsReadiness::report(asOf) array
         +ResultsSeeSync::subject / withdraw(...) array
         +PublishedResults::forStudent(...) array
         +TimetableWriter::add(...) int
@@ -274,7 +281,7 @@ classDiagram
 - **`FeedbackService`** (`jntuacea/feedbackservice.class.php`): Multi-granularity analytical service for Course Outcome (CO) indirect surveys, 5-domain Course End Surveys (CES), and 19-criterion anonymous Student Faculty Appraisals.
 
 ### 3.4 Shared Trusted Core Classes (`jntuacea/core/` & `jntuaceastudents/core/` — `namespace College`)
-Maintained in `jntuacea/core/` and synchronized to `jntuaceastudents/core/` via `php tools/sync_core.php` (22 classes):
+Maintained in `jntuacea/core/` and synchronized to `jntuaceastudents/core/` via `php tools/sync_core.php` (29 classes):
 1. **`Connection`** (`core/Connection.php`): Singleton per-request `mysqli` connection manager (`utf8mb4`), supporting CLI test database overrides (`CEA_DB_NAME`).
 2. **`Clock`** (`core/Clock.php`): Timezone-aware institutional clock defaulting to `Asia/Kolkata`.
 3. **`DateRange`** (`core/DateRange.php`): Validates paired `YYYY-MM-DD` start and end dates before binding them as SQL parameters in attendance and reporting queries.
@@ -284,19 +291,26 @@ Maintained in `jntuacea/core/` and synchronized to `jntuaceastudents/core/` via 
 7. **`AttendanceService`** (`core/AttendanceService.php`): Unified attendance aggregation engine for individual students (`studentSummary()`) and class cohorts (`classSummary()`), honoring `students.date_of_joining`, `student_sub` mappings, `student_permissions`, and unrecorded timetable periods (`missing_periods`).
 8. **`AttendanceCorrection`** (`core/AttendanceCorrection.php`): Executes atomic 7-day single-student attendance corrections (`updateStudentStatuses()`) and row-locked HOD deletion request reviews (`reviewDeleteRequest()`) with co-teaching ambiguity guards, `academic_record_snapshots`, `workflow_review_history`, and `audit_logs`.
 9. **`AssessmentPolicy`** (`core/AssessmentPolicy.php`): Resolves exact regulation settings by `regulation_id` (refusing ambiguous regulation codes or cross-regulation fallbacks) and records immutable SHA-256 policy versions in `academic_policy_versions`.
-10. **`MarksNormalizer`** (`core/MarksNormalizer.php`): Normalizes gross-to-net marks (`scaleMarks()`), resolves student question choices once per choice group (`selectChoiceQuestions()`), shares multi-CO question weights equally (`EQUAL_SHARE`), and validates/estimates grade intervals (`GRADE_ESTIMATE`).
-11. **`AttainmentCalculator`** (`core/AttainmentCalculator.php`): Computes external/SEE Course Outcome attainment across detailed question scores, aggregate direct/imported scores, and grade-derived estimates, reporting `measured_students`, `estimated_students`, `missing_students`, and `provisional` status separately.
-12. **`ResultsPolicy`** (`core/ResultsPolicy.php`): Resolves a course offering's assessment profile and regulation-specific `grade_bands_json` without borrowing a global grade scale.
-13. **`ResultRow`** (`core/ResultRow.php`): Normalizes individual result rows against course policy, enforcing agreement between grade letters, fractional grade points, earned credits, and sentinel marks (`im = -7`, `em = -1`, `em = -5`, `AB`, `MP`, `WH`).
-14. **`ResultsCsv`** (`core/ResultsCsv.php`): Validates and parses `REGULAR`, `SUPPLEMENTARY`, and `REVALUATION` examination result CSV files atomically, matching regular notifications to exact offerings and supplementary/revaluation notifications to unambiguous historical cohort offerings.
-15. **`ResultsSeeSync`** (`core/ResultsSeeSync.php`): Synchronizes published regular-exam SEE evidence inside the caller's transaction while preserving manual/question-wise SEE marks, and marks dependent SEE evidence stale (`is_stale = 1`) when a notification is withdrawn.
-16. **`PublishedResults`** (`core/PublishedResults.php`): Student-scoped published results reader that isolates attempts by notification, resolves exact course offerings, and computes SGPA / attempt GPA (or pending GPA when results are withheld).
-17. **`SubjectCatalog`** (`core/SubjectCatalog.php`): Safely resolves optional `curriculum_subjects` linkage for offered courses without failing when historical links are absent or mismatched.
-18. **`TimetableWriter`** (`core/TimetableWriter.php`): Mutex-locked (`GET_LOCK`) transactional timetable slot insertion enforcing class, room, and faculty conflict checks while permitting multiple distinct subjects per slot within a class (electives/labs) and shared Open Electives across classes in the same room/faculty.
-19. **`DocumentStorage`** (`core/DocumentStorage.php`): Manages private document storage outside the web root (`COLLEGE_DOCUMENT_ROOT` with `private://` URIs) and authenticated streaming of retained legacy documents.
-20. **`CertificateNumber`** (`core/CertificateNumber.php`): Generates concurrency-safe sequential certificate numbers (`certificate_sequences` with `FOR UPDATE`).
-21. **`ReportValue`** (`core/ReportValue.php`): Value object representing measured, provisional, or unavailable report figures.
-22. **`AIProvider`** (`core/AIProvider.php`): Strict HTTP client for `OLLAMA` (private/loopback HTTP/HTTPS) and `OPENAI_COMPATIBLE` (public HTTPS) Chat Completions endpoints, rejecting redirects, link-local SSRF targets, numerical prose hallucinations, and ungrounded evidence references.
+10. **`VerifiedRegulations`** (`core/VerifiedRegulations.php`): Encapsulates verified statutory regulation rules, evaluation formulas, and SHA-256 source PDF hashes for MCA R20, M.Tech R21, M.Tech R25, and B.Tech R20/R23/R26, preventing unverified or accidental fallbacks.
+11. **`CiaCalculator`** (`core/CiaCalculator.php`): Strict regulation-scoped Continuous Internal Assessment policy resolver and calculation engine, enforcing distinct required assessment cycles, weightings, rounding rules, zero preservation, and cohort completeness checks.
+12. **`CiaPolicySettings`** (`core/CiaPolicySettings.php`): Centralized service for reading and persisting regulation-specific CIA schemes (`academic_settings.cia_scheme_json`) with transactional SHA-256 version locking and audit logging.
+13. **`CiaService`** (`core/CiaService.php`): High-level CIA loader computing subject-level and class-level internal assessment ledgers with strict role and record scope enforcement.
+14. **`PgCiaService`** (`core/PgCiaService.php`): Postgraduate continuous assessment service managing discrete assessment component identities (mids 1/2, assignment 3, continuous evaluation 4, lab internal 11, lab record 12).
+15. **`MarksNormalizer`** (`core/MarksNormalizer.php`): Normalizes gross-to-net marks (`scaleMarks()`), resolves student question choices once per choice group (`selectChoiceQuestions()`), shares multi-CO question weights equally (`EQUAL_SHARE`), and validates/estimates grade intervals (`GRADE_ESTIMATE`).
+16. **`AttainmentCalculator`** (`core/AttainmentCalculator.php`): Computes external/SEE Course Outcome attainment across detailed question scores, aggregate direct/imported scores, and grade-derived estimates, reporting `measured_students`, `estimated_students`, `missing_students`, and `provisional` status separately.
+17. **`ResultsPolicy`** (`core/ResultsPolicy.php`): Resolves a course offering's assessment profile and regulation-specific `grade_bands_json` without borrowing a global grade scale.
+18. **`ResultRow`** (`core/ResultRow.php`): Normalizes individual result rows against course policy, enforcing agreement between grade letters, fractional grade points, earned credits, and sentinel marks (`im = -7`, `em = -1`, `em = -5`, `AB`, `MP`, `WH`).
+19. **`ResultsCsv`** (`core/ResultsCsv.php`): Validates and parses `REGULAR`, `SUPPLEMENTARY`, and `REVALUATION` examination result CSV files atomically, matching regular notifications to exact offerings and supplementary/revaluation notifications to unambiguous historical cohort offerings.
+20. **`ResultVersions`** (`core/ResultVersions.php`): Canonical result set generator that eliminates duplicate student/course keys, enforces consistent data typing, and calculates itemized diffs (additions, modifications, deletions) for incremental `MERGE` vs complete `REPLACE` modes.
+21. **`ResultsReadiness`** (`core/ResultsReadiness.php`): Pre-publication course offering audit engine that validates curriculum links, start/end dates, CIA policy completeness, and assessment configurations across all active offerings as of a specific date.
+22. **`ResultsSeeSync`** (`core/ResultsSeeSync.php`): Synchronizes published regular-exam SEE evidence inside the caller's transaction while preserving manual/question-wise SEE marks, and marks dependent SEE evidence stale (`is_stale = 1`) when a notification is withdrawn.
+23. **`PublishedResults`** (`core/PublishedResults.php`): Student-scoped published results reader that isolates attempts by notification, resolves exact course offerings, and computes SGPA / attempt GPA (or pending GPA when results are withheld).
+24. **`SubjectCatalog`** (`core/SubjectCatalog.php`): Safely resolves optional `curriculum_subjects` linkage for offered courses without failing when historical links are absent or mismatched.
+25. **`TimetableWriter`** (`core/TimetableWriter.php`): Mutex-locked (`GET_LOCK`) transactional timetable slot insertion enforcing class, room, and faculty conflict checks while permitting multiple distinct subjects per slot within a class (electives/labs) and shared Open Electives across classes in the same room/faculty.
+26. **`DocumentStorage`** (`core/DocumentStorage.php`): Manages private document storage outside the web root (`COLLEGE_DOCUMENT_ROOT` with `private://` URIs) and authenticated streaming of retained legacy documents.
+27. **`CertificateNumber`** (`core/CertificateNumber.php`): Generates concurrency-safe sequential certificate numbers (`certificate_sequences` with `FOR UPDATE`).
+28. **`ReportValue`** (`core/ReportValue.php`): Value object representing measured, provisional, or unavailable report figures.
+29. **`AIProvider`** (`core/AIProvider.php`): Strict HTTP client for `OLLAMA` (private/loopback HTTP/HTTPS) and `OPENAI_COMPATIBLE` (public HTTPS) Chat Completions endpoints, rejecting redirects, link-local SSRF targets, numerical prose hallucinations, and ungrounded evidence references.
 
 ### 3.5 Enterprise Governance, Assessment, Review & AI Services (`jntuacea/services/` — `namespace Services`)
 - **`FeatureManager`** (`services/FeatureManager.php`): Singleton gatekeeper managing **28 system modules** (`system_feature_modules`, normalizing `MOD_ATTENDANCE_DELETE_REQUESTS` to `MOD_ATT_REQUESTS`), inter-module dependencies (`isModuleEnabled`), role visibility (`VISIBLE`, `READONLY`, `HIDDEN`), and granular action-level RBAC (`role_module_permissions`: `view`, `edit`, `approve`, `export` via `canAction()`, `requireAction()`, `savePermission()`).

@@ -76,41 +76,43 @@ $specializations = $obj->getSpecializationsByDepartment($_SESSION["dept_id"]);
                                         <div class='{$endColor}'>End: {$class['end_date']}</div>
                                       </td>
                                         <td>";
-                                if ($isEnrolled) {
-                                    $btnSubject = $isCompleted ? 'btn-outline-primary' : 'btn-primary';
-                                    $btnFaculty = $isCompleted ? 'btn-outline-success' : 'btn-success';
-                                    $btnStudents = $isCompleted ? 'btn-outline-info' : 'btn-info';
-                                    $btnTimetable = $isCompleted ? 'btn-outline-warning' : 'btn-warning';
+                                $btnSubject = $isCompleted ? 'btn-outline-primary' : 'btn-primary';
+                                $btnFaculty = $isCompleted ? 'btn-outline-success' : 'btn-success';
+                                $btnStudents = $isCompleted ? 'btn-outline-info' : 'btn-info';
+                                $btnTimetable = $isCompleted ? 'btn-outline-warning' : 'btn-warning';
 
-                                    echo '<div class="d-flex flex-wrap gap-1">
-                                            <form action="hodviewsubjects.php" method="post">
-                                                <input type="hidden" name="class_id" value="' . $class['id'] . '" />
-                                                <input type="hidden" name="spec_fullname" value="' . $spec['spec_fullname'] . '" />
-                                                <input type="hidden" name="class_fullname" value="' . $class['classname'] . ' (' . $class['acad_year'] . ')" />
-                                                <button type="submit" class="btn btn-sm ' . $btnSubject . '"><i class="bi bi-book"></i> Subjects</button>
-                                            </form>
-                                            <form action="hodmapfaculty.php" method="post">
-                                                <input type="hidden" name="class_id" value="' . $class['id'] . '" />
-                                                <input type="hidden" name="spec_fullname" value="' . $spec['spec_fullname'] . '" />
-                                                <input type="hidden" name="class_fullname" value="' . $class['classname'] . ' (' . $class['acad_year'] . ')" />
-                                                <button type="submit" class="btn btn-sm ' . $btnFaculty . '"><i class="bi bi-person"></i> Faculty</button>
-                                            </form>
-                                            <form action="hodmapstudents.php" method="post">
-                                                <input type="hidden" name="class_id" value="' . $class['id'] . '" />
-                                                <input type="hidden" name="spec_fullname" value="' . $spec['spec_fullname'] . '" />
-                                                <input type="hidden" name="class_fullname" value="' . $class['classname'] . ' (' . $class['acad_year'] . ')" />
-                                                <button type="submit" class="btn btn-sm ' . $btnStudents . '"><i class="bi bi-people"></i> Students</button>
-                                            </form>
-                                            <form action="hodmanage_timetable.php" method="post">
-                                                <input type="hidden" name="class_id" value="' . $class['id'] . '" />
-                                                <input type="hidden" name="spec_fullname" value="' . $spec['spec_fullname'] . '" />
-                                                <input type="hidden" name="class_fullname" value="' . $class['classname'] . ' (' . $class['acad_year'] . ')" />
-                                                <button type="submit" class="btn btn-sm ' . $btnTimetable . '"><i class="bi bi-calendar-week"></i> Timetable</button>
-                                            </form>
-                                        </div>';
+                                echo '<div class="d-flex flex-wrap gap-1">
+                                        <form action="hodviewsubjects.php" method="post" class="m-0">
+                                            <input type="hidden" name="class_id" value="' . $class['id'] . '" />
+                                            <input type="hidden" name="spec_fullname" value="' . $spec['spec_fullname'] . '" />
+                                            <input type="hidden" name="class_fullname" value="' . $class['classname'] . ' (' . $class['acad_year'] . ')" />
+                                            <button type="submit" class="btn btn-sm ' . $btnSubject . '"><i class="bi bi-book"></i> Subjects</button>
+                                        </form>
+                                        <form action="hodmapfaculty.php" method="post" class="m-0">
+                                            <input type="hidden" name="class_id" value="' . $class['id'] . '" />
+                                            <input type="hidden" name="spec_fullname" value="' . $spec['spec_fullname'] . '" />
+                                            <input type="hidden" name="class_fullname" value="' . $class['classname'] . ' (' . $class['acad_year'] . ')" />
+                                            <button type="submit" class="btn btn-sm ' . $btnFaculty . '"><i class="bi bi-person"></i> Faculty</button>
+                                        </form>';
+
+                                if ($isEnrolled) {
+                                    echo '<form action="hodmapstudents.php" method="post" class="m-0">
+                                            <input type="hidden" name="class_id" value="' . $class['id'] . '" />
+                                            <input type="hidden" name="spec_fullname" value="' . $spec['spec_fullname'] . '" />
+                                            <input type="hidden" name="class_fullname" value="' . $class['classname'] . ' (' . $class['acad_year'] . ')" />
+                                            <button type="submit" class="btn btn-sm ' . $btnStudents . '"><i class="bi bi-people"></i> Students</button>
+                                        </form>';
                                 } else {
-                                    echo "<span class='text-danger-emphasis'>Students Not Enrolled</span>";
+                                    echo '<span class="badge bg-light text-secondary border align-self-center px-2 py-1" title="Students not enrolled yet">Enrollment Pending</span>';
                                 }
+
+                                echo '<form action="hodmanage_timetable.php" method="post" class="m-0">
+                                        <input type="hidden" name="class_id" value="' . $class['id'] . '" />
+                                        <input type="hidden" name="spec_fullname" value="' . $spec['spec_fullname'] . '" />
+                                        <input type="hidden" name="class_fullname" value="' . $class['classname'] . ' (' . $class['acad_year'] . ')" />
+                                        <button type="submit" class="btn btn-sm ' . $btnTimetable . '"><i class="bi bi-calendar-week"></i> Timetable</button>
+                                    </form>
+                                </div>';
                                 echo "</td></tr>";
                             }
 

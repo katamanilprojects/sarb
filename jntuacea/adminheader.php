@@ -1,6 +1,6 @@
 <?php
 
-if(empty($_SESSION["user"]) || empty($_SESSION['userid']) || empty($_SESSION["role"]) || $_SESSION['role']!="admin"){
+if(empty($_SESSION["user"]) || empty($_SESSION['userid']) || empty($_SESSION["role"]) || !in_array($_SESSION['role'], ['admin', 'superadmin'], true)){
 	header('Location: ./');
 	exit();
 }

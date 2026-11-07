@@ -103,7 +103,17 @@ sequenceDiagram
 
 ## 4. Step-by-Step Implementation
 
-### Step 1: Notification Creation & Lifecycle (`academicsectionresults.php`)
+### Step 1: Pre-Publication Readiness Audit (`views/results_readiness.php` & `core/ResultsReadiness.php`)
+Before examination notifications are drafted or results ingested, administrators run the pre-publication audit console:
+- Accessible via `academicsectionresults.php?action=readiness` by `academic_section`, `admin`, and `superadmin`.
+- Powered by `\College\ResultsReadiness::report($asOfDate)`, it evaluates all active course offerings as of the cutoff date:
+  1. **Curriculum Linkage**: Verifies that every offering links to a valid `curriculum_subjects` record matching its regulation, specialization, and semester.
+  2. **Class Dates**: Confirms non-null semester `start_date` and `end_date`.
+  3. **CIA Policy Completeness**: Tests that `\College\CiaCalculator::policy()` successfully resolves without ambiguous settings or duplicate regulation keys.
+  4. **Assessment Profile & Grade Bands**: Verifies that `\College\ResultsPolicy` resolves valid CIE/SEE maxima and non-empty `grade_bands_json`.
+- Displays readiness totals (`cia_ready`, `results_ready`) and categorizes configuration issues so that administrators can remediate them before importing result CSVs.
+
+### Step 2: Notification Creation & Lifecycle (`academicsectionresults.php`)
 - **Access Guard**: Authorized for `academic_section`, `admin`, and `superadmin` (`MOD_RESULTS_PUBLISH`).
 - **Form Parameters**:
   - `notification_code`: Institutional identifier (e.g., `BTECH_R20_3_1_NOV2025`).
@@ -118,8 +128,18 @@ sequenceDiagram
 - **Workflow States (`exam_notifications.workflow_status`)**:
   - `DRAFT` &rarr; `REVIEWED` (`reviewNotification()`) &rarr; `PUBLISHED` (`togglePublishStatus()`). Published notifications lock their imported result rows against overwrite.
 
-### Step 2: CSV Data Ingestion & Legacy Scheme Normalization (`core/ResultsCsv.php`)
-The ingestion engine in `\College\ResultsCsv` seamlessly supports modern headers as well as legacy `resultsold` archives:
+### Step 3: CSV Data Ingestion, Canonical Diffing & Mode Selection (`core/ResultsCsv.php` & `core/ResultVersions.php`)
+The ingestion engine in `\College\ResultsCsv` and `\College\ResultVersions` provides mathematical integrity and reviewability:
+- **Canonical Keying**: Keyed by `HTNO:SUBJECT_CODE`, eliminating duplicate rows and normalizing numeric precision.
+- **Import Modes (`views/results_import_preview.php`)**:
+  - `MERGE` (Incremental Update): Updates changed fields and inserts new rows while retaining untouched student records.
+  - `REPLACE` (Complete Replacement): Replaces the entire notification roster, removing omitted student records.
+- **Preview & Diffing**:
+  - Counts additions, modifications, removals, and unchanged rows.
+  - Displays side-by-side before/after values for modified scores or grade points.
+  - Requires a mandatory administrative justification reason before committing updates.
+  - Preserves removed and changed records in `academic_record_snapshots` grouped by department and course.
+  - Recorded in `views/results_import_history.php` with actor identity, timestamp, reason, and delta counts.
 
 | Legacy Header (`resultsold`) | Modern Header | Canonical Property | Notes & Transformations |
 | :--- | :--- | :--- | :--- |
@@ -135,7 +155,7 @@ The ingestion engine in `\College\ResultsCsv` seamlessly supports modern headers
 | `credits` | `credits_registered`, `credits` | `credits_registered`| In legacy dumps, failed students have `credits = 0`; parsed safely without triggering curriculum mismatch rejections. |
 | `result` | `result_status`, `status` | `result_status` | `P` &rarr; `PASS`, `F` &rarr; `FAIL`, `MP` &rarr; `MALPRACTICE`, `W` &rarr; `WITHHELD`. |
 
-### Step 3: Continuous Internal Assessment (CIA) Reconciliation Audit
+### Step 4: Continuous Internal Assessment (CIA) Reconciliation Audit
 - **Audit Tool**: Tab 3 ("CIA vs Exam Internal Reconciliation & Discrepancies") in `academicsectionresults.php`.
 - **Logic**:
   1. For each student and enrolled subject, `ExamResultsService::calculateStudentPortalCia()` calculates live CIA from faculty assessment entries according to regulation rules.
@@ -143,7 +163,13 @@ The ingestion engine in `\College\ResultsCsv` seamlessly supports modern headers
   3. Discrepancies are categorized into `MATCH` ($\Delta = 0$), `VARIANCE` ($|\Delta| \le 1.0$), `DISCREPANCY` ($|\Delta| > 1.0$), `MISSING_PORTAL_CIA`, or `EXEMPT_OR_MISSING` (`im = -7`).
 - **CSV Export**: Academic Section administrators can download the reconciliation audit log via `?action=export_cia_discrepancy`.
 
-### Step 4: Multi-Mode SEE Attainment & Audited Auto-Sync
+### Step 5: Department Examination Results Review (`hodresults.php`)
+- Heads of Department inspect examination results for their departmental students under `MOD_RESULTS_PUBLISH`:
+  - Filter by regulation, semester, academic year, and examination session.
+  - Displays overall class pass percentages, subject-wise pass rates, and backlog registers.
+  - Direct export of departmental performance summaries for DAAC review.
+
+### Step 6: Multi-Mode SEE Attainment & Audited Auto-Sync
 - **Explicit Notification & Offering Validation (`ExamResultsService::syncResultsToSeeMarks()`)**:
   - Requires an explicitly selected `PUBLISHED` notification with `exam_type = 'REGULAR'` (supplementary/revaluation imports are refused until attempt-selection policy is configured).
   - Resolves the configured external maximum from `AttainmentPolicyService` / `curriculum_subjects` / `regulation_course_types` (ignoring missing or stale curriculum links when an explicit policy maximum exists).
@@ -153,13 +179,17 @@ The ingestion engine in `\College\ResultsCsv` seamlessly supports modern headers
   2. **Measured Aggregate External Marks (`DIRECT_ENTRY`, `PUBLISHED_RESULT_SYNC`, `IMPORT_DIRECT`, `IMPORT_SCALED`)**: Scales raw external marks to the course's net external maximum and evaluates against CO thresholds (`measured_students`).
   3. **Grade-Band Estimate (`GRADE_ESTIMATE:<Grade>:<Policy>`)**: When only letter grades are supplied and a grade-band estimation policy (`midpoint`, `lower`, `upper`) is configured, estimates external score from the grade interval and reports it separately under `estimated_students`.
 
-### Step 5: Student Portal Subject-Level Visibility
-Students can view examination results across multiple touchpoints:
-1. **Semester Grade Cards (`studentresults.php`)**: Full printable grade sheet with credit points, letter grades, fractional grade points, and SGPA.
-2. **Subject Attendance & Assessment Portal (`studentsubatt.php`)**: Displays the subject's **Semester End Examination (SEE) Results & Grade Card** when `MOD_RESULTS_PUBLISH` is visible.
-3. **Enrolled Subjects Register (`studentsubjects.php`)**: Displays an **Exam Result** badge alongside class attendance.
+### Step 7: Student Portal Examination Visibility & Attempt Isolation (`studentresults.php`, `studentsubatt.php`, `studentsubjects.php`)
+Students inspect their official semester examination results across three dedicated touchpoints:
+1. **Semester Grade Cards & Grade Memorandum (`studentresults.php`)**:
+   - Isolates results by `notification_id`, rendering separate grade card sections for each exam session.
+   - Calculates weighted points ($\sum (\text{credits} \times \text{grade\_points})$) and displays **SGPA** for `REGULAR` examinations or **Attempt GPA** for `SUPPLEMENTARY` / `REVALUATION` attempts.
+   - Flags results with missing points or withheld status as `Pending`.
+   - Includes official institutional print formatting (`dontprint` controls and official `STUDENT MEMORANDUM OF GRADES` header block).
+2. **Subject Attendance & Assessment Portal (`studentsubatt.php`)**: Displays the subject's **Semester End Examination (SEE) Results & Grade Card** badge and grade details when `MOD_RESULTS_PUBLISH` is enabled.
+3. **Enrolled Subjects Register (`studentsubjects.php`)**: Renders an **Exam Result** status badge alongside ongoing course attendance.
 
-### Step 6: Advisory Credit-Based Promotion Pipeline Simulation (`MOD_CREDIT_PROMOTION`)
+### Step 8: Advisory Credit-Based Promotion Pipeline Simulation (`MOD_CREDIT_PROMOTION`)
 - **Safety Guardrail**: Governed by `MOD_CREDIT_PROMOTION` (default disabled, `is_enabled_globally = 0`). Purely an advisory dry-run simulation tool that **never blocks** CSV result ingestion, student grade cards, or result notifications.
 - **Service Methods (`services/ExamResultsService.php`)**:
   - `evaluateCreditPromotionSimulation($classId, $regulationCode)`: Analyzes earned credits across past terms for enrolled students in the target class, flags at-risk students, and checks for prior committee clearances.

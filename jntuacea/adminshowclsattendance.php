@@ -172,6 +172,11 @@ $_SESSION['secretcode'] = bin2hex(random_bytes(32));
                         <button type="submit" name="action" value="view_detailed" class="btn btn-info">Detailed Attendance & e-Bluebook</button>
                         <button type="submit" name="action" value="show_diary" class="btn btn-secondary">Show Diary</button>
                         <button type="submit" name="action" value="show_cia" class="btn btn-success">Show Continuous Internal Assessment</button>
+                        <?php if (!empty($selected_cls_id) && \FeatureManager::isModuleEnabled('MOD_ATTENDANCE_CONDONATION_GAZETTE')): ?>
+                        <a href="download_attendance_gazette.php?cls_id=<?= (int)$selected_cls_id; ?>" target="_blank" class="btn btn-warning ms-1">
+                            <i class="bi bi-file-earmark-ruled me-1"></i> Condonation & Detention Gazette
+                        </a>
+                        <?php endif; ?>
                     </form>
                 </div>
             </div>

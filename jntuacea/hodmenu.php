@@ -9,14 +9,14 @@ $showAtt = \FeatureManager::isHodVisible('MOD_ATTENDANCE');
             <a href="hodhome.php" class="w-100 btn <?php if(!empty($page_title) && $page_title=="Home"){ echo "btn-success"; }else{ echo "btn-outline-primary"; } ?>"><i class="bi bi-house-door me-1"></i> Home</a>
         </div>
         <div class="col-6 col-md p-0">
-            <a href="hodviewclasses.php" class="w-100 btn <?php if(!empty($page_title) && $page_title=="Classes"){ echo "btn-success"; }else{ echo "btn-outline-primary"; } ?>"><i class="bi bi-journal-bookmark me-1"></i> Classes</a>
+            <a href="hodviewclasses.php" class="w-100 btn <?php if(!empty($page_title) && in_array($page_title, ["Classes", "Manage Timetable"])){ echo "btn-success"; }else{ echo "btn-outline-primary"; } ?>"><i class="bi bi-journal-bookmark me-1"></i> Classes</a>
         </div>
         <div class="col-6 col-md p-0">
             <a href="hodviewfaculties.php" class="w-100 btn <?php if(!empty($page_title) && $page_title=="Manage Faculty"){ echo "btn-success"; }else{ echo "btn-outline-primary"; } ?>"><i class="bi bi-person-badge me-1"></i> Faculty</a>
         </div>
         <?php if ($showAtt): ?>
         <div class="col-6 col-md p-0">
-            <a href="hodshowattendance.php" class="w-100 btn <?php if(!empty($page_title) && $page_title=="View Attendance"){ echo "btn-success"; }else{ echo "btn-outline-primary"; } ?>"><i class="bi bi-calendar-check me-1"></i> Attendance</a>
+            <a href="hodshowattendance.php" class="w-100 btn <?php if(!empty($page_title) && in_array($page_title, ["View Attendance", "Attendance & Operations", "Academic Records", "HOD - Subject Wise CIA Analysis"])){ echo "btn-success"; }else{ echo "btn-outline-primary"; } ?>"><i class="bi bi-journal-check me-1"></i> Academic Records</a>
         </div>
         <?php endif; ?>
         <div class="col-6 col-md p-0">

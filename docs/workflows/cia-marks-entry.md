@@ -6,14 +6,16 @@ This document outlines the workflows, calculation rules, and database pipelines 
 
 ## 1. Assessment Categories & Entry Interfaces
 
-The application supports four distinct internal evaluation pipelines plus the external SEE pipeline based on the subject's curriculum structure:
+The application supports six distinct internal evaluation pipelines plus the external SEE pipeline based on the subject's curriculum structure and program level:
 
 | Assessment Type | Entry Controller | Database Table | Component Breakdown |
 |---|---|---|---|
-| **UG Theory** | `facaddciamarks.php`, `facciamarks.php`, `facmarksentry.php` | `internal_assessment_marks`, `student_marks` | Descriptive (Subjective), Objective/Quiz, Assignment |
-| **UG Laboratory** | `facaddcialabmarks.php` | `uglab_internal_assessment_marks`, `lab_rubric_evaluations` | Day-to-Day performance (with optional Rubrics), Internal Lab Examination |
-| **Postgraduate (PG)** | `facaddpgciamarks.php` | `pg_internal_assessment_marks` | Mid Test, Assignment, Seminar presentation |
-| **UG Project** | `facaddprojectciamarks.php` | `ugproject_internal_assessment_marks` | Project Phase Reviews (Review-1, Review-2, etc.) |
+| **UG Theory** | `facaddciamarks.php`, `facciamarks.php`, `facmarksentry.php`, `facciamarkscondensed.php` | `internal_assessment_marks`, `student_marks` | Descriptive (Subjective), Objective/Quiz, Assignment |
+| **UG Laboratory** | `facaddcialabmarks.php`, `facbulkd2dmarks.php`, `facuglabciamarkscondensed.php` | `uglab_internal_assessment_marks`, `lab_rubric_evaluations` | Day-to-Day performance (with optional Rubrics or rapid bulk entry), Internal Lab Examination |
+| **Postgraduate (PG)** | `pg_cia_form.php`, `pg_cia_components.php`, `facaddpgciamarks.php` | `pg_internal_assessment_marks` | Separate components: Mid-1 (1), Mid-2 (2), Assignment (3), Continuous Evaluation (4), Lab Internal (11), Lab Record (12) |
+| **Design Thinking & Innovation (DTI)** | `facadddticiamarks.php`, `facdticiamarkscondensed.php` | `internal_assessment_marks` | Innovation reviews, presentation, design prototype, and condensed internal score |
+| **UG Project** | `facaddprojectciamarks.php`, `facviewprojectciamarks.php` | `ugproject_internal_assessment_marks` | Project Phase Reviews (Review-1, Review-2, etc.) |
+| **Consolidated Course Register** | `facviewmarks.php`, `facviewmarkscsv.php` | `internal_assessment_marks`, `uglab_internal_assessment_marks`, `pg_internal_assessment_marks` | Unified course marks award sheet across all students with authenticated CSV export |
 | **Semester End Exam (SEE)** | `facseemarks.php`, `facseecompques.php`, `facseemarksentry.php`, `facseedirectmarks.php`, `attainmentimport.php` | `external_assessment_marks`, `student_marks`, `attainment_import_batches` | Question-level blueprint (Mode A), Direct ledger (Mode B), Published Result Sync (Mode C), or Attainment CSV Import |
 
 ---
@@ -53,17 +55,39 @@ sequenceDiagram
 
 ---
 
-## 3. Regulation Calculation Rules & Condensed Views
+## 3. Regulation Calculation Rules & CIA Policy Architecture
 
-### 3.1 Exact Regulation Resolution & Dynamic Policy Settings
-Under autonomous academic regulations (e.g., R19, R20, R23, R25, R26), final internal marks are computed across Mid-1 and Mid-2 using weightage formulas retrieved dynamically via `Services\SettingsService` and `\College\AssessmentPolicy` (`academic_settings` table):
-- **Exact Regulation Scoping**: Principal CIA and CO paths resolve the exact `regulations.id` (`DBCredentials::getRegulationIdForSubject()`) rather than ambiguous regulation code strings (such as shared `R20` codes across UG and PG), and refuse to silently borrow another regulation's fallback values when a policy setting is missing.
-- **Immutable Policy Versioning**: Supported policy mutations record a SHA-256 policy snapshot in `academic_policy_versions`.
-- **Combined Internal Calculation**:
-  $$\text{Final Internal} = (W_{\text{best}} \times \max(\text{Mid}_1, \text{Mid}_2)) + (W_{\text{worst}} \times \min(\text{Mid}_1, \text{Mid}_2))$$
-  - Under R19/R20/R23: $W_{\text{best}} = 0.80$ and $W_{\text{worst}} = 0.20$ (configurable via `superadminacademicsettings.php`).
+### 3.1 Exact Regulation Scoping & Shared Core Calculator (`core/CiaCalculator.php`)
+Under autonomous regulations, internal assessment marks must be calculated strictly according to regulation rules and exact program levels, without borrowing fallback values across regulations:
+- **Exact Regulation Resolution**: Principal CIA, report export, and CO analysis paths resolve the exact `regulations.id` (`DBCredentials::getRegulationIdForSubject()`) rather than ambiguous regulation code strings (e.g., distinguishing B.Tech R20 from MCA R20).
+- **Independent State per Offering**: `\College\CiaCalculator` maintains isolated calculation state for each course and student, preventing variable leakage across subjects in bulk class exports.
+- **Strict Incompleteness & Zero Preservation**:
+  - All configured required assessments must exist for a final internal score to be generated. If an assessment is missing, the student's final total remains blank and incomplete; missing marks are **never** silently treated as zero.
+  - Zero scores (`0.0`) are preserved and distinguished from missing marks.
+  - If any entered component exceeds configured maxima or violates schema constraints, the final total remains blank with an explicit diagnostic status.
+  - If no complete totals exist in a cohort, exports return an explicit error rather than fabricated or empty ledgers.
 
-### 3.2 Condensed Views & Course File Services Separation
+### 3.2 Regulation CIA Scheme Engine (`cia_policy.php` & `core/CiaPolicySettings.php`)
+The CIA Policy Settings console (`cia_policy.php`) provides administrative governance (`superadmin`, `academic_section`, `admin`) over regulation-scoped evaluation schemes stored in `academic_settings.cia_scheme_json`:
+- **Verified Statutory Formulas (`core/VerifiedRegulations.php`)**:
+  Loaded directly from reviewed autonomous regulation PDF documents, verified against immutable SHA-256 PDF hashes:
+  - **MCA R20** ([Source PDF](../regulations/mca_r20_regulations.pdf)):
+    - Theory: $0.70 \times \max(\text{Mid}_1, \text{Mid}_2) + 0.30 \times \min(\text{Mid}_1, \text{Mid}_2) + \text{Assignment}$ (Mids out of 30, Assignment out of 10 &rarr; Total 40M CIE).
+    - Practical: 40M internal assessment.
+    - Rounding: Nearest integer whole mark.
+  - **M.Tech R21** ([Source PDF](../regulations/mtech_r21_regulations.pdf)):
+    - Theory: $0.70 \times \max(\text{Mid}_1, \text{Mid}_2) + 0.30 \times \min(\text{Mid}_1, \text{Mid}_2) + \text{Assignment}$ (Mids out of 30, Assignment out of 10 &rarr; Total 40M CIE).
+    - Practical: Day-to-Day (10M) + Internal Lab Test (20M) + Lab Record (10M) &rarr; Total 40M CIE.
+  - **M.Tech R25** ([Source PDF](../regulations/mtech_r25_regulations.pdf)):
+    - Theory: $0.80 \times \max(\text{Mid}_1, \text{Mid}_2) + 0.20 \times \min(\text{Mid}_1, \text{Mid}_2) + \text{Continuous Evaluation}$ (Mids out of 30, Continuous Evaluation out of 10 &rarr; Total 40M CIE).
+    - Practical: Day-to-Day (10M) + Internal Lab Test (20M) + Lab Record (10M) &rarr; Total 40M CIE.
+  - **B.Tech R23 (and R20 / R26)** ([Source PDF](../regulations/btech_r23_regulations.pdf)):
+    - Theory: $0.80 \times \max(\text{Mid}_1, \text{Mid}_2) + 0.20 \times \min(\text{Mid}_1, \text{Mid}_2)$ (each Mid combines Subjective 15M, Objective 10M, Assignment 5M &rarr; Total 30M CIE).
+    - Practical: Day-to-Day (15M) + Internal Test (15M) &rarr; Total 30M CIE.
+- **Transactional Policy Versioning**:
+  Saving a CIA scheme requires a mandatory administrative reason and active concurrency check (`version`), recording changes to `academic_settings_audit` and `academic_policy_versions`.
+
+### 3.3 Condensed Views & Course File Services Separation
 
 The platform enforces a strict separation between operational and accreditation course file generation:
 
@@ -141,3 +165,42 @@ Managed via `SEEAssessment` (`seeassessment.class.php`), `Services\SEEBlueprintS
 - **Independent Attainment CSV Import (`attainmentimport.php`)**:
   - `AttainmentImportService` previews and commits external aggregate, scaled gross/net, grade-derived (`GRADE_ESTIMATE`), or question-wise CSV evidence (`attainment_import_batches`) independently of examination result publication.
 - **Consolidated External Review (`facseemarkscondensed.php`)**: Side-by-side ledger displaying scored external marks, provenance (`evidence_basis`), and status.
+
+---
+
+## 8. Postgraduate Continuous Assessment Pipeline (`PgCiaService.php`)
+
+Postgraduate assessment differs fundamentally from undergraduate programs by requiring separate evidence tracks across mid evaluations, assignments, continuous evaluations, laboratory tests, and record submissions (`core/PgCiaService.php`):
+
+### 8.1 Discrete Component Identities
+In `pg_internal_assessment_marks`, each assessment event is stored with a distinct integer component identity:
+- **`1`**: Mid assessment 1 (out of 30M)
+- **`2`**: Mid assessment 2 (out of 30M)
+- **`3`**: Assignment (out of 10M, for M.Tech R21 and MCA R20)
+- **`4`**: Continuous evaluation (out of 10M, for M.Tech R25)
+- **`11`**: Lab internal assessment (out of 30M combined day-to-day & internal test, or 40M)
+- **`12`**: Lab record (out of 10M for M.Tech R21/R25)
+
+### 8.2 PG Form & Components UI (`pg_cia_form.php` & `pg_cia_components.php`)
+- **`pg_cia_components.php`**: Renders configured components for the subject based on the regulation's verified CIA scheme, displaying maximum marks, active weightages, and entry progress.
+- **`pg_cia_form.php`**: Provides whole-cohort entry grid with transactional validation, checking score boundaries, precision (`decimal(12,5)`), student enrollment, and recording before/after audit entries upon modification.
+- **R25 Specialization Invariant**: R25 theory strictly utilizes component `4` (Continuous Evaluation) and ignores old component `3` (Assignment) to prevent double-counting.
+
+---
+
+## 9. Specialized Evaluation Pipelines: Bulk Day-to-Day & DTI CIA
+
+### 9.1 Laboratory Bulk Day-to-Day Marks Entry (`facbulkd2dmarks.php`)
+- For laboratory courses requiring rapid weekly logging across large student cohorts.
+- Directly updates `uglab_internal_assessment_marks.day_to_day_marks` in a single spreadsheet-like grid.
+- Enforces subject-level day-to-day maximum marks retrieved from active regulation course types.
+- Commits atomically with `audit_logs` entries.
+
+### 9.2 Design Thinking & Innovation (DTI) CIA Pipeline (`facadddticiamarks.php` & `facdticiamarkscondensed.php`)
+- Specialized continuous evaluation pipeline for experiential and innovation-focused curricula (e.g. B.Tech R23 DTI).
+- **`facadddticiamarks.php`**: Evaluates individual student innovation prototypes, design briefs, ideation logs, and team presentations.
+- **`facdticiamarkscondensed.php`**: Consolidates multiple evaluation cycles into a verified internal score conforming to regulation maxima.
+
+### 9.3 Unified Marks Register & CSV Export (`facviewmarks.php` & `facviewmarkscsv.php`)
+- Comprehensive faculty course ledger uniting theory CIA, lab day-to-day, PG discrete components, and external SEE scores in a unified student roster.
+- Secure CSV export via `facviewmarkscsv.php` with session, ownership, and CSRF protection.

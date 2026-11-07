@@ -97,5 +97,6 @@ All timetable slot insertions in `hodmanage_timetable.php` and `Timetable` deleg
 
 - **`superadminclasstimings.php`**: SuperAdmin interface to configure master bell timings (Period 1: 09:00 - 09:50, Period 2: 09:50 - 10:40, etc.).
 - **`hodmanage_timetable.php`**: HOD interface to build and manage weekly class schedules with real-time room and faculty conflict prevention.
+- **`hodtimetable.php`**: Departmental master timetable grid allowing HODs to inspect all active class schedules and lab sessions across semesters.
 - **`viewtimetable.php`** & **`jntuaceastudents/studenttimetable.php`**: Staff and student views of section timetables.
 - **`faculty_weekly_timetable.php`**: Personalized schedule for instructors summarizing their weekly teaching commitments across multiple classes and departments.

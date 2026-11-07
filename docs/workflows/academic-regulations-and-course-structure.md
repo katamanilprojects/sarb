@@ -237,3 +237,26 @@ In autonomous academic regulations, student progression across academic years is
 - **Zero-Regression Invariant**: Credit promotion is strictly an **advisory simulation tool** governed by `MOD_CREDIT_PROMOTION` (default disabled, `is_enabled_globally = 0`). It does **not** block CSV result publishing, semester grade cards, or transcript generation.
 - **Committee Overrides**: Academic regulations committee decisions (e.g. condonation on medical grounds, gap years) can record manual overrides, which are immutably written to `audit_logs` with admin user ID, role, client IP address, and timestamp.
 
+---
+
+## 8. Statutory Verification & Canonical Regulation Library (`\College\VerifiedRegulations`)
+
+To eliminate ambiguities across historical regulatory amendments, the core platform provides an immutable catalog of verified statutory regulations (`\College\VerifiedRegulations`). When invoked via `CiaPolicySettings::resolvedRegulation()`, policy settings, assessment schemes, component weights, and grade bands are loaded directly from signed official academic documents:
+
+### 8.1 Verified Regulation Specifications & Cryptographic Hashes
+
+| Program | Regulation | Canonical Source Document | SHA-256 Checksum | Statutory Section | Theory Weight (Better / Lesser) | Theory CIE Max | Theory SEE Max | Lab CIE Components | Grade Scale |
+| :--- | :---: | :--- | :--- | :--- | :---: | :---: | :---: | :--- | :--- |
+| **MCA** | **R20** | `mca_r20_regulations.pdf` | `d9266dc1397a603979f73697e427ad68556af9c71da9e55d5b7ea462c187d967` | 4(i–vii), 5 | 70% / 30% | 40 | 60 | Comp 11 (Max 40) | 11 Bands (S, A1–A3, B1–B2, C1–C2, D1–D2, F) |
+| **M.Tech** | **R21** | `mtech_r21_regulations.pdf` | `8b6e55c5d528b590e38e864c899ded2d17c4886d921dfdf8528a1593690b9556` | 5.1–5.4, 6 | 70% / 30% | 40 | 60 | Comp 11 (30) + Comp 12 (10) | 6 Bands (S, A, B, C, D, F) |
+| **M.Tech** | **R25** | `mtech_r25_regulations.pdf` | `35f1e84b23ece5fb8338247bb3c181ea13174e3c74234829bbec5d0ac9e3ab17` | 8.1–8.4, 15 | 80% / 20% | 40 | 60 | Comp 11 (30) + Comp 12 (10) | 6 Bands (S, A, B, C, D, F) |
+| **B.Tech** | **R23** / **R20** / **R26** | `btech_r23_regulations.pdf` | `ff69c5b814088cc6ddafadc0ab850f5442f49d9b2d0f18dca88a11e0ca09aa4a` | 9, 19; Equivalence confirmed | 80% / 20% | 30 | 70 | Comp 1 (15 D2D + 15 Test) | 7 Bands (A+, A, B, C, D, E, F) |
+
+### 8.2 Architectural Principles
+1. **Explicit Activation**: Verified regulation profiles are activated deterministically by matching `prog_shortname` and `regulation` code. Calculation never silently falls back to arbitrary hardcoded numbers.
+2. **Component Integrity**:
+   - For M.Tech R25, theory requires assessments `[1, 2, 4]` (Mid 1, Mid 2, Continuous Evaluation 4: 10 marks), explicitly ignoring assignment 3.
+   - For M.Tech R21 and MCA R20, theory requires assessments `[1, 2, 3]` (Mid 1, Mid 2, Assignment 3: 10 marks).
+   - For B.Tech R23/R20/R26, Mid subjective (15), objective (10), and assignment (5) constitute the 30-mark mid assessments, weighted 80:20.
+3. **Audit Trail**: Every verification result records source document name, SHA-256 hash, and statutory section references, ensuring compliance audits by statutory bodies (NBA, NAAC, UGC, AICTE) are verifiable.
+
