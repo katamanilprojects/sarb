@@ -129,20 +129,24 @@ $modulesGrouped = $featureManager->getModulesGroupedByCategory();
                         <table class="table table-hover align-middle mb-0">
                             <thead class="table-light small text-muted text-uppercase">
                                 <tr>
-                                    <th style="width: 32%;">Module & Purpose</th>
-                                    <th style="width: 15%; text-align: center;">Global Status</th>
-                                    <th style="width: 18%;">Faculty Access</th>
-                                    <th style="width: 18%;">Student Access</th>
-                                    <th style="width: 17%;">HOD Access</th>
+                                    <th style="width: 25%;">Module &amp; Purpose</th>
+                                    <th style="width: 11%; text-align: center;">Global Status</th>
+                                    <th style="width: 13%;">Faculty Access</th>
+                                    <th style="width: 12%;">Student Access</th>
+                                    <th style="width: 13%;">HOD Access</th>
+                                    <th style="width: 13%;">Academic Section</th>
+                                    <th style="width: 13%;">Principal / Admin</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php foreach ($modules as $mod): 
                                     $key = $mod['module_key'];
                                     $isEnabled = (int)$mod['is_enabled_globally'] === 1;
-                                    $facVis = $mod['faculty_visibility'] ?? 'VISIBLE';
-                                    $stuVis = $mod['student_visibility'] ?? 'VISIBLE';
-                                    $hodVis = $mod['hod_visibility'] ?? 'VISIBLE';
+                                    $facVis  = $mod['faculty_visibility'] ?? 'VISIBLE';
+                                    $stuVis  = $mod['student_visibility'] ?? 'VISIBLE';
+                                    $hodVis  = $mod['hod_visibility'] ?? 'VISIBLE';
+                                    $acadVis = $mod['academic_section_visibility'] ?? 'VISIBLE';
+                                    $admVis  = $mod['admin_visibility'] ?? 'VISIBLE';
                                 ?>
                                     <tr>
                                         <td>
@@ -184,6 +188,20 @@ $modulesGrouped = $featureManager->getModulesGroupedByCategory();
                                                 <option value="VISIBLE" <?= $hodVis === 'VISIBLE' ? 'selected' : ''; ?>>Visible</option>
                                                 <option value="HIDDEN" <?= $hodVis === 'HIDDEN' ? 'selected' : ''; ?>>Hidden</option>
                                                 <option value="READONLY" <?= $hodVis === 'READONLY' ? 'selected' : ''; ?>>Read-Only</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <select name="features[<?= htmlspecialchars($key); ?>][academic_section_vis]" class="form-select form-select-sm">
+                                                <option value="VISIBLE" <?= $acadVis === 'VISIBLE' ? 'selected' : ''; ?>>Visible</option>
+                                                <option value="HIDDEN" <?= $acadVis === 'HIDDEN' ? 'selected' : ''; ?>>Hidden</option>
+                                                <option value="READONLY" <?= $acadVis === 'READONLY' ? 'selected' : ''; ?>>Read-Only</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <select name="features[<?= htmlspecialchars($key); ?>][admin_vis]" class="form-select form-select-sm">
+                                                <option value="VISIBLE" <?= $admVis === 'VISIBLE' ? 'selected' : ''; ?>>Visible</option>
+                                                <option value="HIDDEN" <?= $admVis === 'HIDDEN' ? 'selected' : ''; ?>>Hidden</option>
+                                                <option value="READONLY" <?= $admVis === 'READONLY' ? 'selected' : ''; ?>>Read-Only</option>
                                             </select>
                                         </td>
                                     </tr>

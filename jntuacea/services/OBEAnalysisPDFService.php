@@ -79,7 +79,7 @@ class OBEAnalysisPDFService
 
     /**
      * Main entry point to generate the progressive OBE Analysis Dossier PDF
-     * - Mid-Semester (CIA Stage): Generates 5 Pages (CIA-1, CIA-2, Consolidated CIA, Learning Analytics, Zero Marks)
+     * - CIA Stage (Pending SEE Marks): Generates 5 Pages (CIA-1, CIA-2, Consolidated CIA, Learning Analytics, Zero Marks)
      * - End-of-Semester (Complete): Generates 10 Pages (Full CIA + SEE analysis + Attainment matrices)
      * 
      * @param int|array $courseData Subject ID or array containing course metadata
@@ -140,11 +140,11 @@ class OBEAnalysisPDFService
 
         $footerText = $hasSee
             ? 'Official accreditation analysis dossier. Recorded evidence and configured policy require authorised review. Page {PAGENO} of {nbpg}.'
-            : 'Provisional CIA analysis dossier (Semester End Examination pending). Recorded evidence requires authorised review. Page {PAGENO} of {nbpg}.';
+            : 'Provisional CIA analysis dossier (Pending SEE Marks). Recorded evidence requires authorised review. Page {PAGENO} of {nbpg}.';
         $mpdf->SetHTMLFooter('<div style="font-size:8px; color:#555;">' . $footerText . '</div>');
 
         $headerFn = function($sectionTitle) use ($meta, $hasSee) {
-            $statusBadge = $hasSee ? '' : '<br><span style="font-size:8px; color:#b45309; font-weight:normal;">[Provisional CIA &mdash; SEE Pending]</span>';
+            $statusBadge = $hasSee ? '' : '<br><span style="font-size:8px; color:#b45309; font-weight:normal;">[Provisional CIA &mdash; Pending SEE Marks]</span>';
             return '
             <table cellpadding="6" cellspacing="0" style="width:100%; border-collapse:collapse; table-layout:fixed;">
                 <tr>
@@ -1576,11 +1576,9 @@ class OBEAnalysisPDFService
             <div style="margin-top:16px;">
                 <table cellpadding="4" cellspacing="0" style="width:100%; border-collapse:collapse; font-size:8px; text-align:center;">
                     <tr>
-                        <td style="width:20%;"><br><br>____________________________<br><strong>Course Teacher</strong><br>' . htmlspecialchars($meta['faculty']) . '</td>
-                        <td style="width:20%;"><br><br>____________________________<br><strong>Course Coordinator</strong><br>Module Reviewer</td>
-                        <td style="width:20%;"><br><br>____________________________<br><strong>DAAC Convener</strong><br>Academic Audit Cell</td>
-                        <td style="width:20%;"><br><br>____________________________<br><strong>Head of Department</strong><br>Dept. of ' . htmlspecialchars($meta['dept_name']) . '</td>
-                        <td style="width:20%;"><br><br>____________________________<br><strong>Principal</strong><br>JNTUACEA</td>
+                        <td style="width:33.33%;"><br><br>____________________________<br><strong>Course Faculty</strong><br>' . htmlspecialchars($meta['faculty']) . '</td>
+                        <td style="width:33.33%;"><br><br>____________________________<br><strong>Head of Department</strong><br>Dept. of ' . htmlspecialchars($meta['dept_name']) . '</td>
+                        <td style="width:33.33%;"><br><br>____________________________<br><strong>Principal</strong><br>JNTUACEA</td>
                     </tr>
                 </table>
             </div>
@@ -1799,10 +1797,9 @@ class OBEAnalysisPDFService
             <div style="margin-top:6px;">
                 <table cellpadding="2" cellspacing="0" style="width:100%; border-collapse:collapse; font-size:7px; text-align:center;">
                     <tr>
-                        <td style="width:25%;"><br><br>____________________________<br><strong>Course Teacher</strong><br>' . htmlspecialchars($meta['faculty']) . '</td>
-                        <td style="width:25%;"><br><br>____________________________<br><strong>Course Coordinator</strong><br>Module Reviewer</td>
-                        <td style="width:25%;"><br><br>____________________________<br><strong>Head of Department</strong><br>Dept. of ' . htmlspecialchars($meta['dept_name']) . '</td>
-                        <td style="width:25%;"><br><br>____________________________<br><strong>Principal</strong><br>JNTUACEA</td>
+                        <td style="width:33.33%;"><br><br>____________________________<br><strong>Course Faculty</strong><br>' . htmlspecialchars($meta['faculty']) . '</td>
+                        <td style="width:33.33%;"><br><br>____________________________<br><strong>Head of Department</strong><br>Dept. of ' . htmlspecialchars($meta['dept_name']) . '</td>
+                        <td style="width:33.33%;"><br><br>____________________________<br><strong>Principal</strong><br>JNTUACEA</td>
                     </tr>
                 </table>
             </div>

@@ -82,8 +82,8 @@ if (!empty($userFacId) && ($_SESSION['role'] ?? '') === 'faculty') {
 
 // For SAR Form C-3, ensure SEE marks are added because SAR Form C-3 requires final comprehensive attainment.
 // For the OBE Analytics Dossier and Zero Marks report, the dossier is progressive:
-// mid-semester (when SEE is pending), it generates the provisional CIA analytics dossier (including Zero Marks);
-// end-of-semester (when SEE marks are added), it generates the full 10-page comprehensive dossier.
+// when SEE marks are pending, it generates the provisional CIA analytics dossier (including Zero Marks);
+// once SEE marks are added, it generates the full 10-page comprehensive dossier.
 if ($requestedAction === 'sar_form_c3') {
     require_once __DIR__ . '/seeassessment.class.php';
     $seeObj = new SEEAssessment();

@@ -17,6 +17,7 @@ $showDiary      = \FeatureManager::isFacultyVisible('MOD_CLASS_DIARY');
 $showAttendance = \FeatureManager::isFacultyVisible('MOD_ATTENDANCE');
 $showAttRequests= \FeatureManager::isFacultyVisible('MOD_ATT_REQUESTS');
 $showGrouped    = \FeatureManager::isFacultyVisible('MOD_GROUPED_ATT');
+$showUserManual = \FeatureManager::isUserManualVisible('faculty');
 
 $hasCurriculumCard = $showCoPo || $showLessonPlan;
 $hasAssessmentCard = $showCiaMarks || $showSeeMarks || $showObeAnalysis || $showFeedback;
@@ -176,10 +177,39 @@ $hasGroupedCard    = $showGrouped;
                 </div>
                 <?php endif; ?>
 
+                <!-- 6. User Manual & OBE Reference Resources -->
+                <div class="col">
+                    <div class="card h-100 shadow-sm border-secondary">
+                        <div class="card-header bg-secondary-subtle text-dark fw-semibold">
+                            <i class="bi bi-book-half me-2"></i><?= $showUserManual ? 'User Manual &amp; OBE Reference' : 'OBE Reference Resources' ?>
+                        </div>
+                        <div class="card-body d-flex flex-column">
+                            <p class="card-text text-muted small">
+                                <?= $showUserManual 
+                                    ? 'Step-by-step instructions tailored to currently enabled features, downloadable PDF guide, and OBE strategies.' 
+                                    : 'Guidelines and key strategies for Course Outcomes, Articulation Matrices, and Bloom\'s taxonomy.' ?>
+                            </p>
+                            <div class="mt-auto">
+                                <?php if ($showUserManual): ?>
+                                    <a href="facusermanual.php" class="btn btn-outline-primary d-block mb-2">
+                                        <i class="bi bi-book me-1"></i> Interactive Faculty User Manual
+                                    </a>
+                                    <a href="facusermanual_pdf.php?download=1" class="btn btn-outline-danger d-block mb-2">
+                                        <i class="bi bi-file-earmark-pdf me-1"></i> Download Custom Manual (PDF)
+                                    </a>
+                                <?php endif; ?>
+                                <a href="facknowledgebase.php" target="_blank" class="btn btn-outline-secondary d-block">
+                                    <i class="bi bi-lightbulb me-1"></i> OBE Knowledge Base &amp; Bloom's Guide
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <?php if (!$hasCurriculumCard && !$hasAssessmentCard && !$hasDiaryCard && !$hasRequestsCard && !$hasGroupedCard): ?>
                 <div class="col-12">
                     <div class="alert alert-info text-center">
-                        <i class="bi bi-info-circle me-2"></i>No additional options are currently active for this semester.
+                        <i class="bi bi-info-circle me-2"></i>No additional module options are currently active for this semester.
                     </div>
                 </div>
                 <?php endif; ?>

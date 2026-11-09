@@ -71,11 +71,13 @@ require_once __DIR__ . '/services/FeatureManager.php';
                     <i class="bi bi-eye me-1"></i> Academic Views
                 </button>
                 <ul class="dropdown-menu w-100" aria-labelledby="academicViewsDropdown">
+                    <?php if (\FeatureManager::canRoleAccess('MOD_ATTENDANCE', 'academic_section')): ?>
                     <li>
                         <a class="dropdown-item" href="academicsectionshowallclsattendance.php">
                             <i class="bi bi-calendar-check me-1"></i> View Attendance
                         </a>
                     </li>
+                    <?php endif; ?>
                     <li>
                         <a class="dropdown-item" href="viewtimetable.php">
                             <i class="bi bi-clock-history me-1"></i> Campus Timetable & Room Usage
@@ -90,6 +92,13 @@ require_once __DIR__ . '/services/FeatureManager.php';
             </div>
         </div>
 
+        <?php
+        $showResultsMenu      = \FeatureManager::canRoleAccess('MOD_RESULTS_PUBLISH', 'academic_section');
+        $showProfilesMenu     = \FeatureManager::canRoleAccess('MOD_STUDENT_PROFILE', 'academic_section');
+        $showCertificatesMenu = \FeatureManager::canRoleAccess('MOD_CERTIFICATES', 'academic_section');
+        $hasExamsDossierMenu  = $showResultsMenu || $showProfilesMenu || $showCertificatesMenu;
+        ?>
+        <?php if ($hasExamsDossierMenu): ?>
         <div class="col-6 col-md-2">
             <div class="dropdown w-100">
                 <button class="w-100 btn <?php echo (!empty($page_title) && in_array($page_title, ['Publish Results', 'Student Profiles & Dossier', 'Certificates Ledger', 'Examination Results'])) ? 'btn-success' : 'btn-outline-primary'; ?> dropdown-toggle"
@@ -100,19 +109,21 @@ require_once __DIR__ . '/services/FeatureManager.php';
                     <i class="bi bi-file-earmark-spreadsheet me-1"></i> Exams & Dossier
                 </button>
                 <ul class="dropdown-menu w-100" aria-labelledby="examResultsDropdown">
+                    <?php if ($showResultsMenu): ?>
                     <li>
                         <a class="dropdown-item" href="academicsectionresults.php">
                             <i class="bi bi-file-earmark-arrow-up me-1"></i> Publish Results
                         </a>
                     </li>
-                    <?php if (\FeatureManager::isModuleEnabled('MOD_STUDENT_PROFILE')): ?>
+                    <?php endif; ?>
+                    <?php if ($showProfilesMenu): ?>
                     <li>
                         <a class="dropdown-item" href="adminstudentprofiles.php">
                             <i class="bi bi-person-badge me-1"></i> Student Profiles & Vault
                         </a>
                     </li>
                     <?php endif; ?>
-                    <?php if (\FeatureManager::isModuleEnabled('MOD_CERTIFICATES')): ?>
+                    <?php if ($showCertificatesMenu): ?>
                     <li>
                         <a class="dropdown-item" href="admincustodyledger.php">
                             <i class="bi bi-journal-bookmark me-1"></i> Custody & Certificates
@@ -122,6 +133,7 @@ require_once __DIR__ . '/services/FeatureManager.php';
                 </ul>
             </div>
         </div>
+        <?php endif; ?>
 
         <div class="col-6 col-md-2">
             <div class="dropdown w-100">

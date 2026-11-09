@@ -387,7 +387,7 @@ class COAnalysis extends DBCredentials
 
                 $notes = [];
                 if (!$hasSee) {
-                    $notes[] = 'Calculated from CIA only (SEE pending).';
+                    $notes[] = 'Calculated from CIA only (Pending SEE Marks).';
                 }
                 if (!empty($coHasChoiceQuestion[$coNum])) {
                     $notes[] = 'Choice applicability unknown for some mapped questions.';

@@ -109,6 +109,16 @@ final class RequestSecurity
                         'academicsectionresults.php',
                         'facciaanalysis2.class.php',
                         'viewtimetable.php',
+                        'facusermanual.php',
+                        'facusermanual_pdf.php',
+                        'hodusermanual.php',
+                        'hodusermanual_pdf.php',
+                        'adminusermanual.php',
+                        'adminusermanual_pdf.php',
+                        'academicsectionusermanual.php',
+                        'academicsectionusermanual_pdf.php',
+                        'superadminusermanual.php',
+                        'superadminusermanual_pdf.php',
                     ];
 
                     if (in_array($page, $sharedStudentPages, true)) {

@@ -38,6 +38,7 @@ $regCount = count($regulations['data'] ?? []);
 $acadYearCount = count($acadYears['data'] ?? []);
 $moduleCount = count($modules);
 $batchCount = count($batches);
+$showUserManual = \Services\FeatureManager::isUserManualVisible('superadmin');
 ?>
 <div class="container my-4">
     <!-- Welcome Header Banner -->
@@ -52,7 +53,9 @@ $batchCount = count($batches);
                         Manage central university academic structures, degree regulations, bell schedules, and system-wide feature toggles.
                     </p>
                 </div>
-                <div class="d-flex gap-2"><a href="superadminattainmentsettings.php" class="btn btn-outline-primary btn-sm">Attainment profiles</a><a href="superadminaiproviders.php" class="btn btn-outline-secondary btn-sm">AI providers</a>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="superadminattainmentsettings.php" class="btn btn-outline-primary btn-sm">Attainment profiles</a>
+                    <a href="superadminaiproviders.php" class="btn btn-outline-secondary btn-sm">AI providers</a>
                     <a href="superadminfeatures.php" class="btn btn-outline-primary btn-sm">
                         <i class="bi bi-toggles me-1"></i> Feature Toggles
                     </a>
@@ -62,6 +65,21 @@ $batchCount = count($batches);
                 </div>
             </div>
         </div>
+        <?php if ($showUserManual): ?>
+        <div class="card-footer bg-light d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
+            <span class="small text-muted">
+                <i class="bi bi-book-half me-1 text-primary"></i> Step-by-step documentation and role workflows:
+            </span>
+            <div class="d-flex flex-wrap gap-2">
+                <a href="superadminusermanual.php" class="btn btn-primary btn-sm">
+                    <i class="bi bi-book-half me-1"></i> User Manuals (All Roles)
+                </a>
+                <a href="superadminusermanual_pdf.php?download=1" class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-file-earmark-pdf me-1"></i> Download Manual PDF
+                </a>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 
     <!-- Section 1: Academic Structure -->
@@ -137,7 +155,7 @@ $batchCount = count($batches);
 
     <!-- Section 2: Batch-Centric Governance & Full OBE Hierarchy -->
     <h6 class="text-uppercase text-secondary fw-bold mb-3 small">
-        <i class="bi bi-people-fill me-1 text-primary"></i> Batch-Centric Governance & Full OBE Hierarchy
+        <i class="bi bi-people-fill me-1 text-primary"></i> Batch-Centric Governance &amp; Full OBE Hierarchy
     </h6>
     <div class="row g-3 mb-4">
         <div class="col-md-6 col-sm-6">
@@ -168,7 +186,7 @@ $batchCount = count($batches);
                         <div>
                             <span class="text-muted text-uppercase small fw-bold">Full-Cycle OBE Articulation</span>
                             <h4 class="fw-bold text-success mb-0">Vision &rarr; Mission &rarr; PEO &rarr; PO</h4>
-                            <small class="text-muted">Multi-level articulation & attainment backtracking</small>
+                            <small class="text-muted">Multi-level articulation &amp; attainment backtracking</small>
                         </div>
                         <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success">
                             <i class="bi bi-diagram-3-fill fs-2"></i>
@@ -186,7 +204,7 @@ $batchCount = count($batches);
 
     <!-- Section 3: Examinations, Student Dossier & Statutory Certificates -->
     <h6 class="text-uppercase text-secondary fw-bold mb-3 small">
-        <i class="bi bi-file-earmark-spreadsheet me-1 text-primary"></i> Examinations, Student Dossier & Statutory Certificates
+        <i class="bi bi-file-earmark-spreadsheet me-1 text-primary"></i> Examinations, Student Dossier &amp; Statutory Certificates
     </h6>
     <div class="row g-3 mb-4">
         <div class="col-md-6 col-sm-6">
@@ -195,8 +213,8 @@ $batchCount = count($batches);
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
                             <span class="text-muted text-uppercase small fw-bold">Examination Publishing</span>
-                            <h4 class="fw-bold text-primary mb-0">Grade Cards & SEE Sync</h4>
-                            <small class="text-muted">Bulk CSV results upload & 1-click SEE ingestion</small>
+                            <h4 class="fw-bold text-primary mb-0">Grade Cards &amp; SEE Sync</h4>
+                            <small class="text-muted">Bulk CSV results upload &amp; 1-click SEE ingestion</small>
                         </div>
                         <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary">
                             <i class="bi bi-file-earmark-spreadsheet fs-2"></i>
@@ -215,8 +233,8 @@ $batchCount = count($batches);
                 <div class="card-body d-flex flex-column justify-content-between p-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
-                            <span class="text-muted text-uppercase small fw-bold">Student Dossier & Custody</span>
-                            <h4 class="fw-bold text-warning mb-0">Vault & Certificates</h4>
+                            <span class="text-muted text-uppercase small fw-bold">Student Dossier &amp; Custody</span>
+                            <h4 class="fw-bold text-warning mb-0">Vault &amp; Certificates</h4>
                             <small class="text-muted">Custodial, Bonafide, Study/Conduct, and TC issuance</small>
                         </div>
                         <div class="bg-warning bg-opacity-10 p-3 rounded-circle text-warning">
@@ -225,7 +243,7 @@ $batchCount = count($batches);
                     </div>
                     <div class="d-flex gap-2 mt-2">
                         <a href="adminstudentprofiles.php" class="btn btn-outline-primary btn-sm flex-fill fw-semibold">
-                            <i class="bi bi-person-badge me-1"></i> Profiles & Vault
+                            <i class="bi bi-person-badge me-1"></i> Profiles &amp; Vault
                         </a>
                         <a href="admincustodyledger.php" class="btn btn-outline-warning text-dark btn-sm flex-fill fw-semibold">
                             <i class="bi bi-award me-1"></i> Custody Ledger
@@ -238,7 +256,7 @@ $batchCount = count($batches);
 
     <!-- Section 4: Policy & System Governance -->
     <h6 class="text-uppercase text-secondary fw-bold mb-3 small">
-        <i class="bi bi-shield-lock me-1"></i> Policy & Governance
+        <i class="bi bi-shield-lock me-1"></i> Policy &amp; Governance
     </h6>
     <div class="row g-3">
         <div class="col-md-3 col-sm-6">

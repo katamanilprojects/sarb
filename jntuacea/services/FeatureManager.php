@@ -52,7 +52,8 @@ class FeatureManager extends \DBCredentials
         $this->modulesCache = [];
         $query = "SELECT `id`, `module_key`, `module_name`, `category`, `description`, 
                          `is_enabled_globally`, `faculty_visibility`, `student_visibility`, 
-                         `hod_visibility`, `sort_order`, `updated_by`, `updated_at` 
+                         `hod_visibility`, `academic_section_visibility`, `admin_visibility`, 
+                         `sort_order`, `updated_by`, `updated_at` 
                   FROM `system_feature_modules` 
                   ORDER BY `sort_order` ASC, `id` ASC";
 
@@ -67,16 +68,17 @@ class FeatureManager extends \DBCredentials
         // Auto-seed missing core module definitions if absent from system_feature_modules
         $seedNeeded = false;
         $coreDefaults = [
-            'MOD_STUDENT_PROFILE' => ['Student Profiles & Digital Dossier', 'STUDENT_PORTAL', 'Institutional student profiles, personal dossier, and digital document vault', 0, 'HIDDEN', 'VISIBLE', 'READONLY', 42],
-            'MOD_CERTIFICATES' => ['Institutional Certificates & Custody', 'GENERAL', 'Original certificate custody ledger, issuance workflow, and verification', 0, 'HIDDEN', 'VISIBLE', 'HIDDEN', 43],
-            'MOD_RESULTS_PUBLISH' => ['Department & Semester Results', 'EXAM', 'Published semester results, pass percentages, student grade cards, and backlog rosters', 0, 'HIDDEN', 'VISIBLE', 'READONLY', 44],
+            'MOD_STUDENT_PROFILE' => ['Student Profiles & Digital Dossier', 'STUDENT_PORTAL', 'Institutional student profiles, personal dossier, and digital document vault', 0, 'HIDDEN', 'VISIBLE', 'READONLY', 'VISIBLE', 'VISIBLE', 42],
+            'MOD_CERTIFICATES' => ['Institutional Certificates & Custody', 'GENERAL', 'Original certificate custody ledger, issuance workflow, and verification', 0, 'HIDDEN', 'VISIBLE', 'HIDDEN', 'VISIBLE', 'VISIBLE', 43],
+            'MOD_RESULTS_PUBLISH' => ['Department & Semester Results', 'EXAM', 'Published semester results, pass percentages, student grade cards, and backlog rosters', 0, 'HIDDEN', 'VISIBLE', 'READONLY', 'VISIBLE', 'VISIBLE', 44],
+            'MOD_USER_MANUALS' => ['Role User Manuals (Web & PDF)', 'GENERAL', 'Interactive web user manuals and downloadable PDF step-by-step guides for institutional roles.', 1, 'VISIBLE', 'HIDDEN', 'VISIBLE', 'VISIBLE', 'VISIBLE', 45],
         ];
 
         foreach ($coreDefaults as $modKey => $def) {
             if (!isset($this->modulesCache[$modKey])) {
-                $seedStmt = $this->conn->prepare("INSERT INTO system_feature_modules (module_key, module_name, category, description, is_enabled_globally, faculty_visibility, student_visibility, hod_visibility, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE module_key = VALUES(module_key)");
+                $seedStmt = $this->conn->prepare("INSERT INTO system_feature_modules (module_key, module_name, category, description, is_enabled_globally, faculty_visibility, student_visibility, hod_visibility, academic_section_visibility, admin_visibility, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE module_key = VALUES(module_key)");
                 if ($seedStmt) {
-                    $seedStmt->bind_param("ssssisssi", $modKey, $def[0], $def[1], $def[2], $def[3], $def[4], $def[5], $def[6], $def[7]);
+                    $seedStmt->bind_param("ssssisssssi", $modKey, $def[0], $def[1], $def[2], $def[3], $def[4], $def[5], $def[6], $def[7], $def[8], $def[9]);
                     $seedStmt->execute();
                     $seedStmt->close();
                     $seedNeeded = true;
@@ -312,6 +314,132 @@ class FeatureManager extends \DBCredentials
     }
 
     /**
+     * Check if a module is visible to Academic Section.
+     * When $includeReadOnly is true (default), returns true if module is VISIBLE or READONLY.
+     */
+    public static function isAcademicSectionVisible(string $moduleKey, bool $includeReadOnly = true): bool
+    {
+        if ($moduleKey === 'MOD_ATTENDANCE_DELETE_REQUESTS') { $moduleKey = 'MOD_ATT_REQUESTS'; }
+        $instance = self::getInstance();
+        $instance->loadModules();
+
+        if (!isset($instance->modulesCache[$moduleKey])) {
+            return false;
+        }
+
+        $mod = $instance->modulesCache[$moduleKey];
+        if (!self::isModuleEnabled($moduleKey)) {
+            return false;
+        }
+
+        $vis = $mod['academic_section_visibility'] ?? 'VISIBLE';
+        if ($vis === 'VISIBLE') {
+            return true;
+        }
+        if ($vis === 'READONLY') {
+            return $includeReadOnly;
+        }
+        return false;
+    }
+
+    /**
+     * Check if a module is in Read-Only mode for Academic Section.
+     */
+    public static function isAcademicSectionReadOnly(string $moduleKey): bool
+    {
+        if ($moduleKey === 'MOD_ATTENDANCE_DELETE_REQUESTS') { $moduleKey = 'MOD_ATT_REQUESTS'; }
+        $instance = self::getInstance();
+        $instance->loadModules();
+
+        if (!isset($instance->modulesCache[$moduleKey])) {
+            return false;
+        }
+
+        $mod = $instance->modulesCache[$moduleKey];
+        return self::isModuleEnabled($moduleKey) && ($mod['academic_section_visibility'] ?? '') === 'READONLY';
+    }
+
+    /**
+     * Check if Academic Section has full write/manage access to a module.
+     */
+    public static function isAcademicSectionWritable(string $moduleKey): bool
+    {
+        if ($moduleKey === 'MOD_ATTENDANCE_DELETE_REQUESTS') { $moduleKey = 'MOD_ATT_REQUESTS'; }
+        $instance = self::getInstance();
+        $instance->loadModules();
+
+        if (!isset($instance->modulesCache[$moduleKey])) {
+            return false;
+        }
+
+        $mod = $instance->modulesCache[$moduleKey];
+        return self::isModuleEnabled($moduleKey) && ($mod['academic_section_visibility'] ?? '') === 'VISIBLE';
+    }
+
+    /**
+     * Check if a module is visible to Admin (Principal Office).
+     * When $includeReadOnly is true (default), returns true if module is VISIBLE or READONLY.
+     */
+    public static function isAdminVisible(string $moduleKey, bool $includeReadOnly = true): bool
+    {
+        if ($moduleKey === 'MOD_ATTENDANCE_DELETE_REQUESTS') { $moduleKey = 'MOD_ATT_REQUESTS'; }
+        $instance = self::getInstance();
+        $instance->loadModules();
+
+        if (!isset($instance->modulesCache[$moduleKey])) {
+            return false;
+        }
+
+        $mod = $instance->modulesCache[$moduleKey];
+        if (!self::isModuleEnabled($moduleKey)) {
+            return false;
+        }
+
+        $vis = $mod['admin_visibility'] ?? 'VISIBLE';
+        if ($vis === 'VISIBLE') {
+            return true;
+        }
+        if ($vis === 'READONLY') {
+            return $includeReadOnly;
+        }
+        return false;
+    }
+
+    /**
+     * Check if a module is in Read-Only mode for Admin.
+     */
+    public static function isAdminReadOnly(string $moduleKey): bool
+    {
+        if ($moduleKey === 'MOD_ATTENDANCE_DELETE_REQUESTS') { $moduleKey = 'MOD_ATT_REQUESTS'; }
+        $instance = self::getInstance();
+        $instance->loadModules();
+
+        if (!isset($instance->modulesCache[$moduleKey])) {
+            return false;
+        }
+
+        $mod = $instance->modulesCache[$moduleKey];
+        return self::isModuleEnabled($moduleKey) && ($mod['admin_visibility'] ?? '') === 'READONLY';
+    }
+
+    /**
+     * Check if Admin has full write/manage access to a module.
+     */
+    public static function isAdminWritable(string $moduleKey): bool
+    {
+        if ($moduleKey === 'MOD_ATTENDANCE_DELETE_REQUESTS') { $moduleKey = 'MOD_ATT_REQUESTS'; }
+        $instance = self::getInstance();
+        $instance->loadModules();
+
+        if (!isset($instance->modulesCache[$moduleKey])) {
+            return false;
+        }
+
+        $mod = $instance->modulesCache[$moduleKey];
+        return self::isModuleEnabled($moduleKey) && ($mod['admin_visibility'] ?? '') === 'VISIBLE';
+    }
+
+    /**
      * Generic role-based access check (read or write).
      */
     public static function canRoleAccess(string $moduleKey, ?string $role = null): bool
@@ -334,7 +462,8 @@ class FeatureManager extends \DBCredentials
 
         return match ($r) {
             'superadmin' => true,
-            'academic_section', 'admin' => true,
+            'academic_section' => self::isAcademicSectionVisible($moduleKey, true),
+            'admin' => self::isAdminVisible($moduleKey, true),
             'hod' => self::isHodVisible($moduleKey, true),
             'faculty' => self::isFacultyVisible($moduleKey, true),
             'student' => self::isStudentVisible($moduleKey),
@@ -364,7 +493,8 @@ class FeatureManager extends \DBCredentials
 
         return match ($r) {
             'superadmin' => true,
-            'academic_section', 'admin' => true,
+            'academic_section' => self::isAcademicSectionWritable($moduleKey),
+            'admin' => self::isAdminWritable($moduleKey),
             'hod' => self::isHodWritable($moduleKey),
             'faculty' => self::isFacultyWritable($moduleKey),
             'student' => self::isStudentVisible($moduleKey),
@@ -423,6 +553,96 @@ class FeatureManager extends \DBCredentials
         }
 
         return self::canRoleAccess($moduleKey, $role) && !self::canRoleWrite($moduleKey, $role);
+    }
+
+    /**
+     * Check if the User Manual feature is visible and accessible for a given role.
+     *
+     * Respects:
+     * 1. Global enable switch: `MOD_USER_MANUALS` must be enabled globally (`is_enabled_globally = 1`).
+     *    If globally disabled, returns false for all standard roles.
+     * 2. Per-role visibility columns from `system_feature_modules`:
+     *    - faculty: `faculty_visibility` !== 'HIDDEN'
+     *    - hod: `hod_visibility` !== 'HIDDEN'
+     *    - student: `student_visibility` === 'VISIBLE'
+     * 3. Role action permissions from `role_module_permissions`:
+     *    - admin, academic_section, hod, faculty: action 'view' must not be explicitly denied.
+     * 4. SuperAdmin: returns true as long as `MOD_USER_MANUALS` is enabled globally.
+     *
+     * @param string|null $role Role name (faculty, hod, admin, academic_section, superadmin, student). If null, uses $_SESSION['role'].
+     * @return bool
+     */
+    public static function isUserManualVisible(?string $role = null): bool
+    {
+        if ($role === null) {
+            if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
+                session_start();
+            }
+            $role = $_SESSION['role'] ?? '';
+        }
+
+        $r = strtolower(trim((string)$role));
+        if ($r === '') {
+            return false;
+        }
+
+        // Global master switch check
+        if (!self::isModuleEnabled('MOD_USER_MANUALS')) {
+            return false;
+        }
+
+        // SuperAdmin always has full access when feature is globally enabled
+        if ($r === 'superadmin') {
+            return true;
+        }
+
+        // Check if explicitly denied in role_module_permissions table (action = 'view')
+        if (!self::permissionAllows('MOD_USER_MANUALS', 'view', $r)) {
+            return false;
+        }
+
+        // Check role visibility in system_feature_modules
+        return match ($r) {
+            'faculty' => self::isFacultyVisible('MOD_USER_MANUALS', true),
+            'hod'     => self::isHodVisible('MOD_USER_MANUALS', true),
+            'student' => self::isStudentVisible('MOD_USER_MANUALS'),
+            'academic_section' => self::isAcademicSectionVisible('MOD_USER_MANUALS', true),
+            'admin'   => self::isAdminVisible('MOD_USER_MANUALS', true),
+            default   => false,
+        };
+    }
+
+    /**
+     * Guard user manual page access. Redirects if user manual feature is disabled
+     * for the active role or the requested manual role.
+     */
+    public static function requireUserManualAccess(string $manualRole): void
+    {
+        if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
+            session_start();
+        }
+        $activeRole = strtolower(trim((string)($_SESSION['role'] ?? '')));
+        if ($activeRole === 'superadmin') {
+            if (!self::isModuleEnabled('MOD_USER_MANUALS')) {
+                $_SESSION['err'] = "User Manuals are currently disabled globally.";
+                header("Location: ./superadminhome.php");
+                exit();
+            }
+            return;
+        }
+
+        if (!self::isUserManualVisible($activeRole) || !self::isUserManualVisible($manualRole)) {
+            $_SESSION['err'] = "User Manuals are currently inactive for this role.";
+            $home = match ($activeRole) {
+                'faculty' => './fachome.php',
+                'hod' => './hodhome.php',
+                'academic_section' => './academicsectionhome.php',
+                'admin' => './adminhome.php',
+                default => './index.php',
+            };
+            header("Location: {$home}");
+            exit();
+        }
     }
 
     /**
@@ -524,6 +744,8 @@ class FeatureManager extends \DBCredentials
         string $facultyVisibility,
         string $studentVisibility,
         string $hodVisibility,
+        string $academicSectionVisibility = 'VISIBLE',
+        string $adminVisibility = 'VISIBLE',
         ?int $updatedBy = null
     ): array {
         if($moduleKey==='MOD_ATTENDANCE_DELETE_REQUESTS'){$moduleKey='MOD_ATT_REQUESTS';}
@@ -533,6 +755,8 @@ class FeatureManager extends \DBCredentials
         $facultyVisibility = in_array($facultyVisibility, ['VISIBLE', 'HIDDEN', 'READONLY'], true) ? $facultyVisibility : 'VISIBLE';
         $studentVisibility = in_array($studentVisibility, ['VISIBLE', 'HIDDEN'], true) ? $studentVisibility : 'VISIBLE';
         $hodVisibility = in_array($hodVisibility, ['VISIBLE', 'HIDDEN', 'READONLY'], true) ? $hodVisibility : 'VISIBLE';
+        $academicSectionVisibility = in_array($academicSectionVisibility, ['VISIBLE', 'HIDDEN', 'READONLY'], true) ? $academicSectionVisibility : 'VISIBLE';
+        $adminVisibility = in_array($adminVisibility, ['VISIBLE', 'HIDDEN', 'READONLY'], true) ? $adminVisibility : 'VISIBLE';
         $isEnabledGlobally = ($isEnabledGlobally === 1) ? 1 : 0;
 
         try {
@@ -542,6 +766,8 @@ class FeatureManager extends \DBCredentials
                     `faculty_visibility` = ?, 
                     `student_visibility` = ?, 
                     `hod_visibility` = ?, 
+                    `academic_section_visibility` = ?, 
+                    `admin_visibility` = ?, 
                     `updated_by` = ?,
                     `updated_at` = NOW()
                 WHERE `module_key` = ?
@@ -551,7 +777,7 @@ class FeatureManager extends \DBCredentials
                 throw new \Exception("Prepare statement failed: " . $this->conn->error);
             }
 
-            $stmt->bind_param("isssis", $isEnabledGlobally, $facultyVisibility, $studentVisibility, $hodVisibility, $updatedBy, $moduleKey);
+            $stmt->bind_param("isssssis", $isEnabledGlobally, $facultyVisibility, $studentVisibility, $hodVisibility, $academicSectionVisibility, $adminVisibility, $updatedBy, $moduleKey);
             $stmt->execute();
             $affected = $stmt->affected_rows;
             $stmt->close();
@@ -585,6 +811,8 @@ class FeatureManager extends \DBCredentials
                     `faculty_visibility` = ?, 
                     `student_visibility` = ?, 
                     `hod_visibility` = ?, 
+                    `academic_section_visibility` = ?, 
+                    `admin_visibility` = ?, 
                     `updated_by` = ?,
                     `updated_at` = NOW()
                 WHERE `module_key` = ?
@@ -600,8 +828,10 @@ class FeatureManager extends \DBCredentials
                 $facVis = in_array($row['faculty_vis'] ?? '', ['VISIBLE', 'HIDDEN', 'READONLY'], true) ? $row['faculty_vis'] : 'VISIBLE';
                 $stuVis = in_array($row['student_vis'] ?? '', ['VISIBLE', 'HIDDEN'], true) ? $row['student_vis'] : 'VISIBLE';
                 $hodVis = in_array($row['hod_vis'] ?? '', ['VISIBLE', 'HIDDEN', 'READONLY'], true) ? $row['hod_vis'] : 'VISIBLE';
+                $acadVis = in_array($row['academic_section_vis'] ?? '', ['VISIBLE', 'HIDDEN', 'READONLY'], true) ? $row['academic_section_vis'] : 'VISIBLE';
+                $admVis = in_array($row['admin_vis'] ?? '', ['VISIBLE', 'HIDDEN', 'READONLY'], true) ? $row['admin_vis'] : 'VISIBLE';
 
-                $stmt->bind_param("isssis", $enabled, $facVis, $stuVis, $hodVis, $updatedBy, $key);
+                $stmt->bind_param("isssssis", $enabled, $facVis, $stuVis, $hodVis, $acadVis, $admVis, $updatedBy, $key);
                 $stmt->execute();
                 $updatedCount++;
             }
