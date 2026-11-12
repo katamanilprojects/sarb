@@ -41,7 +41,7 @@ if (!empty($classes)) {
             $feedbackEndDate = new DateTime('2026-09-30 23:59:59'); // Set your temporary date here
         }
         // temporary for all
-        $feedbackEndDate = new DateTime('2026-11-08 23:59:59');
+        $feedbackEndDate = new DateTime('2026-11-14 23:59:59');
 
         // Add calculated dates to class array
         $class['feedback_start_date'] = $feedbackStartDate->format('d-m-Y');

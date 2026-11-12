@@ -66,8 +66,9 @@ if (isset($_POST['submit_cos']) && !empty($selected_sub_id)) {
 // Handle Curriculum Master CO Import
 if ((!empty($_POST['import_curriculum_cos']) || !empty($_POST['import_bos_cos'])) && !empty($selected_sub_id)) {
     \FeatureManager::requireWriteAccess('MOD_CO_PO');
-    if (!empty($_POST['secretcode']) && $_POST['secretcode'] == $_SESSION['secretcode']) {
-        unset($_SESSION['secretcode']);
+    $validSec = (!empty($_POST['secretcode']) && !empty($_SESSION['secretcode']) && hash_equals($_SESSION['secretcode'], $_POST['secretcode']));
+    $validCsrf = (!empty($_POST['_csrf']) && !empty($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $_POST['_csrf']));
+    if ($validSec || $validCsrf) {
         $importRes = $coObj->importMasterCOsToSubject((int)$selected_sub_id);
         if ($importRes['status'] == 1 && $importRes['copied'] > 0) {
             $_SESSION['succ'] = "Successfully imported {$importRes['copied']} Master Course Outcome(s) and articulation matrix from curriculum catalog.";
@@ -84,8 +85,9 @@ if ((!empty($_POST['import_curriculum_cos']) || !empty($_POST['import_bos_cos'])
 // Handle CO insertion
 if (!empty($_POST['add_co']) && !empty($_POST['co_number']) && !empty($_POST['co_description']) && !empty($selected_sub_id)) {
     \FeatureManager::requireWriteAccess('MOD_CO_PO');
-    if (!empty($_POST['secretcode']) && $_POST['secretcode'] == $_SESSION['secretcode']) {
-        unset($_SESSION['secretcode']);
+    $validSec = (!empty($_POST['secretcode']) && !empty($_SESSION['secretcode']) && hash_equals($_SESSION['secretcode'], $_POST['secretcode']));
+    $validCsrf = (!empty($_POST['_csrf']) && !empty($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $_POST['_csrf']));
+    if ($validSec || $validCsrf) {
         $co_description = trim($_POST['co_description']);
         $co_number = trim($_POST['co_number']);
         $bloom_level = !empty($_POST['bloom_level']) ? trim($_POST['bloom_level']) : 'L3-Apply';
@@ -157,6 +159,7 @@ require_once("facheader.php");
                             </select>
                         </div>
                         <br />
+                        <input type="hidden" name="_csrf" value="<?php echo htmlspecialchars(\College\RequestSecurity::token(), ENT_QUOTES, 'UTF-8'); ?>">
                         <input type="hidden" name="secretcode" value="<?php echo $_SESSION['secretcode']; ?>">
                         <button type="submit" class="btn btn-primary">Get COs</button>
                     </form>
@@ -184,6 +187,7 @@ require_once("facheader.php");
                         <span>These COs are currently synchronized from the official curriculum syllabus catalog template.</span>
                     </div>
                     <form method="post" action="facaddcos.php" class="my-1">
+                        <input type="hidden" name="_csrf" value="<?php echo htmlspecialchars(\College\RequestSecurity::token(), ENT_QUOTES, 'UTF-8'); ?>">
                         <input type="hidden" name="sub_id" value="<?php echo htmlspecialchars($selected_sub_id); ?>">
                         <input type="hidden" name="secretcode" value="<?php echo $_SESSION['secretcode']; ?>">
                         <button type="submit" name="import_curriculum_cos" value="1" class="btn btn-warning btn-sm">
@@ -286,9 +290,10 @@ require_once("facheader.php");
                             </div>
                         </div>
 
-                        <input type="hidden" name="sub_id" value="<?php echo $selected_sub_id; ?>">
+                        <input type="hidden" name="_csrf" value="<?php echo htmlspecialchars(\College\RequestSecurity::token(), ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="sub_id" value="<?php echo htmlspecialchars($selected_sub_id); ?>">
                         <input type="hidden" name="co_number" id="co_number_input" value="<?php echo $co_num; ?>">
-                        <input type="hidden" name="secretcode" value="<?php echo $_SESSION['secretcode']; ?>">
+                        <input type="hidden" name="secretcode" value="<?php echo htmlspecialchars($_SESSION['secretcode'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                         <button type="submit" name="add_co" value="1" id="singleCoSubmitBtn" class="btn btn-success"><i class="bi bi-check-lg"></i> Add CO</button>
                         <button type="button" class="btn btn-outline-secondary ms-2" onclick="cancelEditCO()">Cancel</button>
                     </form>
@@ -304,8 +309,9 @@ require_once("facheader.php");
                 echo '  <div class="card-body">';
                 echo '    <p class="text-muted mb-3">Course Outcomes already exist for subject code <strong>' . htmlspecialchars($selected_subcode) . '</strong> in the curriculum catalog or other class sections. You can import them directly into this class offering with one click.</p>';
                 echo '    <form method="post" action="facaddcos.php">';
+                echo '      <input type="hidden" name="_csrf" value="' . htmlspecialchars(\College\RequestSecurity::token(), ENT_QUOTES, 'UTF-8') . '">';
                 echo '      <input type="hidden" name="sub_id" value="' . htmlspecialchars($selected_sub_id) . '">';
-                echo '      <input type="hidden" name="secretcode" value="' . $_SESSION['secretcode'] . '">';
+                echo '      <input type="hidden" name="secretcode" value="' . htmlspecialchars($_SESSION['secretcode'] ?? '', ENT_QUOTES, 'UTF-8') . '">';
                 echo '      <button type="submit" name="import_curriculum_cos" value="1" class="btn btn-primary"><i class="bi bi-box-arrow-in-down"></i> Import Course Outcomes &amp; Matrix</button>';
                 echo '    </form>';
                 echo '  </div>';
@@ -316,7 +322,7 @@ require_once("facheader.php");
             echo '<div class="card-header bg-light fw-bold">' . (!empty($can_import_cos) ? 'Option 2: Manually Define Course Outcomes' : 'Add Course Outcomes') . '</div>';
             echo '<div class="card-body">';
             echo '<div class="form-group mb-3" id="divnoofcos"><label class="form-label fw-bold">How many COs are defined for this Course?</label><div class="input-group" style="max-width: 320px;"><input type="number" class="form-control" name="noofcos" id="noofcos" min="1" max="10" placeholder="e.g. 5" required /><button type="button" name="getfields" id="getfields" class="btn btn-outline-primary">Generate Fields</button></div></div>';
-            echo '<form id="addcosform" method="post"></form>';
+            echo '<form id="addcosform" method="post" action="facaddcos.php"></form>';
             echo '</div>';
             echo "</div>";
 
@@ -335,7 +341,11 @@ require_once("facheader.php");
                     }
             
                     divnoofcos.style.display = "none";
+                    const csrfToken = ' . json_encode(\College\RequestSecurity::token()) . ';
+                    const secretCode = ' . json_encode($_SESSION['secretcode'] ?? '') . ';
                     addcosform.innerHTML = `
+                        <input type="hidden" name="_csrf" value="${csrfToken}">
+                        <input type="hidden" name="secretcode" value="${secretCode}">
                         <input type="hidden" name="sub_id" value="' . htmlspecialchars($selected_sub_id) . '">
                         <div class="alert alert-info py-2 mb-3">
                             <i class="bi bi-info-circle me-1"></i> Configure the <strong>Bloom\'s Taxonomy Level (BTL)</strong>, <strong>Target Threshold Limit (%)</strong>, and <strong>Statement</strong> for each Course Outcome below.
