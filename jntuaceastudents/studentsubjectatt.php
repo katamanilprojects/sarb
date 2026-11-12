@@ -297,32 +297,38 @@ $subjectPercentage = ($totalConducted > 0) ? round(($totalPresent / $totalConduc
                 }
                 $ciaEscape = static fn($v) => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
             ?>
-                <table class="table table-bordered">
-                    <thead>
-                        <tr>
-                            <th colspan="2">Continuous Internal Assessment</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($ciaEvidence as $ciaRow): ?>
+                <?php if (!empty($ciaEvidence) || $ciaResult['final'] !== null): ?>
+                    <table class="table table-bordered">
+                        <thead>
                             <tr>
-                                <td><?= $ciaEscape($ciaPg ? \College\PgCiaService::label((int)$ciaRow['assessment_number']) : 'Assessment ' . $ciaRow['assessment_number']) ?></td>
-                                <td>
-                                    <?php $ciaParts = [];
-                                    foreach (['subjective_marks' => 'Subjective', 'objective_marks' => 'Objective', 'assignment_marks' => 'Assignment', 'day_to_day_marks' => 'Day to day', 'internal_test_marks' => 'Internal test', 'component1_marks' => 'Component 1', 'component2_marks' => 'Component 2', 'marks' => 'Marks'] as $ciaField => $ciaLabel) {
-                                        if (array_key_exists($ciaField, $ciaRow)) {
-                                            $ciaParts[] = $ciaLabel . ': ' . $ciaRow[$ciaField];
-                                        }
-                                    } ?>
-                                    <?= $ciaEscape(implode('; ', $ciaParts)) ?></td>
+                                <th colspan="2">Continuous Internal Assessment</th>
                             </tr>
-                        <?php endforeach; ?>
-                        <tr>
-                            <th>Final CIA</th>
-                            <td><?= $ciaResult['final'] !== null ? $ciaEscape($ciaResult['final']) : 'Pending — ' . $ciaEscape($ciaResult['reason']) ?></td>
-                        </tr>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($ciaEvidence as $ciaRow): ?>
+                                <tr>
+                                    <td><?= $ciaEscape($ciaPg ? \College\PgCiaService::label((int)$ciaRow['assessment_number']) : 'Assessment ' . $ciaRow['assessment_number']) ?></td>
+                                    <td>
+                                        <?php $ciaParts = [];
+                                        foreach (['subjective_marks' => 'Subjective', 'objective_marks' => 'Objective', 'assignment_marks' => 'Assignment', 'day_to_day_marks' => 'Day to day', 'internal_test_marks' => 'Internal test', 'component1_marks' => 'Component 1', 'component2_marks' => 'Component 2', 'marks' => 'Marks'] as $ciaField => $ciaLabel) {
+                                            if (array_key_exists($ciaField, $ciaRow)) {
+                                                $ciaParts[] = $ciaLabel . ': ' . $ciaRow[$ciaField];
+                                            }
+                                        } ?>
+                                        <?= $ciaEscape(implode('; ', $ciaParts)) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <?php if ($ciaResult['final'] !== null): ?>
+                                <tr>
+                                    <th>Final CIA</th>
+                                    <td><?= $ciaEscape($ciaResult['final']) ?></td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                <?php else: ?>
+                    <div class="alert alert-info">No internal assessment records found yet.</div>
+                <?php endif; ?>
             <?php endif; ?>
 
             <?php if (\FeatureManager::isStudentVisible('MOD_RESULTS_PUBLISH')):
